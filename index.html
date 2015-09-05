@@ -1,0 +1,383 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>UEFI programming</title>
+  <meta name="author" content="Dai Zhenghua">
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+  
+  <meta property="og:site_name" content="UEFI programming"/>
+
+  
+    <meta property="og:image" content="undefined"/>
+  
+
+  <link href="/favicon.png" rel="icon">
+  <link rel="alternate" href="/atom.xml" title="UEFI programming" type="application/atom+xml">
+  <link rel="stylesheet" href="/css/style.css" media="screen" type="text/css">
+  <link href="//netdna.bootstrapcdn.com/font-awesome/3.2.1/css/font-awesome.css" rel="stylesheet">
+  <!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+  <script src="/js/jquery.min.js"></script>
+  
+<script type="text/javascript">
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45019001-1', 'topdna.org');
+  ga('send', 'pageview');
+
+</script>
+
+
+</head>
+
+
+<body>
+  <!--[if lte IE 8]> <div style=' clear: both; height: 59px; padding:0 0 0 15px; position: relative;margin:0 auto;'> <a href="http://windows.microsoft.com/en-US/internet-explorer/products/ie/home?ocid=ie6_countdown_bannercode"><img src="http://storage.ie6countdown.com/assets/100/images/banners/warning_bar_0027_Simplified Chinese.jpg" border="0" height="42" width="820" alt="You are using an outdated browser. For a faster, safer browsing experience, upgrade for free today." style='margin-left:auto;margin-right:auto;display: block;'/></a></div> <![endif]-->
+  <header id="header" class="inner"><div class="alignleft">
+  <h1><a href="/">UEFI programming</a></h1>
+  <h2><a href="/"></a></h2>
+</div>
+<nav id="main-nav" class="alignright">
+  <ul>
+    
+      <li><a href="/">首页</a></li>
+    
+      <li><a href="/archives">归档</a></li>
+    
+  </ul>
+  <div class="clearfix"></div>
+</nav>
+<div class="clearfix"></div></header>
+  <div id="content" class="inner">
+    <div id="main-col" class="alignleft"><div id="wrapper">
+  <article class="post">
+  
+    <div class="gallery">
+  <div class="photoset">
+    
+      <img src="">
+    
+  </div>
+  <div class="control">
+    <div class="prev"></div>
+    <div class="next"></div>
+  </div>
+</div>
+  
+  <div class="post-content">
+    <header>
+      
+        <time datetime="2015-08-23T05:47:31.000Z"><a href="/2015/08/23/reset-vector/">2015-08-23</a></time>
+      
+      
+  
+    <h1 class="title"><a href="/2015/08/23/reset-vector/"></a></h1>
+  
+
+    </header>
+    <div class="entry">
+      
+        <h1 id="深入UEFI内核">深入UEFI内核</h1><p>前面通过《UEFI原理与编程》一书介绍了如何使用UEFI编写应用程序和驱动，编程一书是从上层应用和驱动开发者的角度认识UEFI的，UEFI就像一个黑盒子，书中详细介绍了这个黑盒子的表面（即UEFI提供给上层开发者的接口和服务）。接口通过Protocol呈现给开发者。主要的Protocol包括控制台输入输出Protocol；文件及硬盘Protocol；操作外部设备的Protocol（PciIo等）；驱动框架Protocol；人机交互接口Protocol；网络Protocol。服务通过启动服务和运行时服务提供，主要包括Protocol服务，内存管理服务，事件管理服务等。UEFI虽然庞大，但它通过模块化被很清晰的组织在一起，当逐步掌握了这些主要的Protocol和服务之后，UEFI也就变得简单起来，那么是时候深入到这个盒子内部，了解UEFI内核的运行机制了。<br>下面将以系统启动过程为主线介绍UEFI内核。</p>
+<h2 id="第一条指令（ResetVector）">第一条指令（ResetVector）</h2><p>先说结论：X86 CPU启动后，将从地址0xFFFFFFF0处开始执行（此地址并非内存地址。此时，内存还远远没有初始化。）。这一章来看X86系统是如何实现这一点的。<br>加电或者RESET针脚被激发（Assert）后[ref intel] CPU会经历如下几个过程:</p>
+<ol>
+<li>CPU首先会进行硬件初始化（hardware reset）。</li>
+<li>然后是可选的自检过程（BIST built-in self-test）。</li>
+<li>CPU开始执行第一条指令。从此开始CPU进入软件初始化过程。<h3 id="初始化概述">初始化概述</h3><h4 id="1-CPU硬件初始化">1.CPU硬件初始化</h4>CPU硬件初始化完成后，CPU被设置为实地址模式，地址无分页。所有寄存器被初始化为特定的值， Cache、TLB（Translation Lookup Table）、BLB（Branch Target Buffer）这三个部件的内容被清空（Invalidate）。<h4 id="2-自检">2.自检</h4>CPU硬件初始化过程中，硬件可能请求执行自检。如果执行自检，自检完成后，EAX的值为自检错误码，0表示没有任何错误；<h4 id="3-第一条指令">3.第一条指令</h4>现在，完事俱备，CPU已经准备好，迫不及待地要执行第一条指令了。且慢，这是一个重要的时刻，此刻决定了CPU能否正常指令，让我们详细了解一下CPU目前的状态。<br>表1-1 CPU初始化后的寄存器（部分）</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Register</th>
+<th>Pentium 4 and Intel Xeon  Processor</th>
+<th>P6 Family Processor Including DisplayFamily = 06H)</th>
+<th>Pentium Processor</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>EFLAGS1</td>
+<td>00000002H</td>
+<td>00000002H</td>
+<td>00000002H</td>
+</tr>
+<tr>
+<td>EIP</td>
+<td>0000FFF0H</td>
+<td>0000FFF0H</td>
+<td>0000FFF0H</td>
+</tr>
+<tr>
+<td>CR0</td>
+<td>60000010H</td>
+<td>60000010H</td>
+<td>60000010H</td>
+</tr>
+<tr>
+<td>CR2, CR3, CR4</td>
+<td>00000000H</td>
+<td>00000000H</td>
+<td>00000000H</td>
+</tr>
+<tr>
+<td>CS</td>
+<td>Selector = F000H <br>Base = FFFF0000H <br>Limit = FFFFH <br>AR = Present, R/W, Accessed</td>
+<td>Selector = F000H<br> Base = FFF0000H<br> Limit = FFFFH<br> AR = Present, R/W, Accessed</td>
+<td>Selector = F000H<br> Base = FFFF0000H<br> Limit = FFFFH<br> AR = Present, R/W, Accessed</td>
+</tr>
+<tr>
+<td>SS, DS, ES, FS, GS</td>
+<td>Selector = 0000H<br> Base = 00000000H<br> Limit = FFFFH<br> AR = Present, R/W, Accessed</td>
+<td>Selector = 0000H<br> Base = 00000000H <br>Limit = FFFFH<br> AR = Present, R/W, Accessed</td>
+<td>Selector = 0000H<br> Base = 00000000H<br> Limit = FFFFH<br> AR = Present, R/W, Accessed</td>
+</tr>
+<tr>
+<td>EDX</td>
+<td>00000FxxH</td>
+<td>000n06xxH</td>
+<td>000005xxH</td>
+</tr>
+<tr>
+<td>EAX</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>EBX, ECX, ESI, EDI, EBP,ESP</td>
+<td>00000000H</td>
+<td>00000000H</td>
+<td>00000000H</td>
+</tr>
+</tbody>
+</table>
+<p>此处我们最关心的是指令执行相关的两个寄存器EIP（Instruction Pointer）、CS（Code Segment）。<br>在实地址模式下（寄存器字长为16位），指令的物理地址是CS &lt;&lt; 4 + EIP。段寄存器CS左移四位作为基址，再加上作为偏移的EIP，最终形成指令的物理地址。现代CPU中为了加速指令地址的计算，为每个段寄存器增加了两个寄存器：Base和Limit。Base存放基址，Limit存放最大偏移值。Base和Limit寄存器不能通过指令直接读写，他们的值是在写段寄存器时由CPU自动设置的。通常Base等于段寄存器左移四位，如果CS的值为0xF000，CS的Base寄存器则为0xF0000，但CPU初始化时例外。从表1-1可以看出CS的值为0xF000, 但其Base为0xFFFF0000，EIP为0xFFF0,此时对应的指令地址为0xFFFF0000+0xFFF0 = 0xFFFFFFF0。0xFFFFFFF0就是CPU将要执行的第一条指令。这造成这样一个有趣的事实，16位程序眼中的指令地址空间0x0000~0xFFFF（大小为64K）被CPU翻译到物理地址空间(0xFFFF0000~0xFFFFFFFF)。也就是说，从CPU初始化，到段寄存器被重写（通过跨段跳转指令）前，指令空间0x0000~0xFFFF通过段寄存器被映射到物理地址空间0xFFFF0000~0xFFFFFFFF。<br>前面讲到第一条指令地址为0xFFFFFFF0，X86系统初始化时会将ROM中的固件映射的（0xFFFFFFFF-固件大小）～0xFFFFFFFF的地址空间。故而0xFFFFFFF0对应ROM中的某条指令，无论ROM中存放的是传统的BIOS固件，还是存放的UEFI固件，这个规则都是一样的。下面将从这天指令开始继续CPU初始化之旅。</p>
+<h3 id="-fdf文件">.fdf文件</h3><p>开始讲0xFFFFFFF0对应的指令之前，还要熟悉UEFI ROM的的结构。<br>ROM固件（Flash Device binary image）由一个或多个Firmware volume（FV）构成，每个FV里存放了FFS Image（EFI Firmware File system），FFS Image则由多个EFI Section构成，EFI Section包含了PE32/PE32+/Coff Image文件。<br>欲熟悉UEFI ROM的结构，先来看.fdf文件的格式。.fdf(Flash Description File)用于生成固件镜像，它由[Defines]、[FD]、[FV]等几个部分组成。</p>
+<h4 id="[Defines]">[Defines]</h4><p>在[Defines]部分可以通过DEFINE定义本文件将要用到的宏，通过SET定义PCD的值。例如OvmfPkg的OvmfPkgX64.fdf文件的[Defines]为<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">[Defines]</span><br><span class="line">!<span class="keyword">if</span> $(TARGET) == RELEASE</span><br><span class="line">!ifndef $(FD_SIZE_2MB)</span><br><span class="line">DEFINE FD_SIZE_1MB=</span><br><span class="line">!endif</span><br><span class="line">!endif</span><br><span class="line"></span><br><span class="line">!include OvmfPkg.fdf.inc</span><br></pre></td></tr></table></figure></p>
+<p>!ifdef, !ifndef, !if, !elseif, !else and !endif 用于编写条件语句。$(TARGET)是EDK预定义的宏，其值为build命令-b选项的值。可以看出，编译Release版本时，通过DEFINE定义了FD_SIZE_1MB宏。<br>然后通过！include包含了OvmfPkg.fdf.inc文件，OvmfPkg.fdf.inc内容如下<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line">DEFINE BLOCK_SIZE        = <span class="number">0x1000</span></span><br><span class="line">DEFINE VARS_SIZE         = <span class="number">0x20000</span></span><br><span class="line">DEFINE VARS_BLOCKS       = <span class="number">0x20</span></span><br><span class="line"></span><br><span class="line">!ifdef $(FD_SIZE_1MB)</span><br><span class="line"></span><br><span class="line">DEFINE FW_BASE_ADDRESS   = <span class="number">0xFFF00000</span></span><br><span class="line">DEFINE FW_SIZE           = <span class="number">0x00100000</span></span><br><span class="line">DEFINE FW_BLOCKS         = <span class="number">0x100</span></span><br><span class="line">DEFINE CODE_BASE_ADDRESS = <span class="number">0xFFF20000</span></span><br><span class="line">DEFINE CODE_SIZE         = <span class="number">0x000E0000</span></span><br><span class="line">DEFINE CODE_BLOCKS       = <span class="number">0xE0</span></span><br><span class="line">DEFINE FVMAIN_SIZE       = <span class="number">0x000CC000</span></span><br><span class="line">DEFINE SECFV_OFFSET      = <span class="number">0x000EC000</span></span><br><span class="line">DEFINE SECFV_SIZE        = <span class="number">0x14000</span></span><br><span class="line"></span><br><span class="line">!<span class="keyword">else</span></span><br><span class="line"></span><br><span class="line">DEFINE FW_BASE_ADDRESS   = <span class="number">0xFFE00000</span></span><br><span class="line">DEFINE FW_SIZE           = <span class="number">0x00200000</span></span><br><span class="line">DEFINE FW_BLOCKS         = <span class="number">0x200</span></span><br><span class="line">DEFINE CODE_BASE_ADDRESS = <span class="number">0xFFE20000</span></span><br><span class="line">DEFINE CODE_SIZE         = <span class="number">0x001E0000</span></span><br><span class="line">DEFINE CODE_BLOCKS       = <span class="number">0x1E0</span></span><br><span class="line">DEFINE FVMAIN_SIZE       = <span class="number">0x001AC000</span></span><br><span class="line">DEFINE SECFV_OFFSET      = <span class="number">0x001CC000</span></span><br><span class="line">DEFINE SECFV_SIZE        = <span class="number">0x34000</span></span><br><span class="line"></span><br><span class="line">!endif</span><br><span class="line"></span><br><span class="line">SET gUefiOvmfPkgTokenSpaceGuid.PcdOvmfFdBaseAddress     = $(FW_BASE_ADDRESS)</span><br><span class="line">SET gUefiOvmfPkgTokenSpaceGuid.PcdOvmfFirmwareFdSize    = $(FW_SIZE)</span><br><span class="line">SET gUefiOvmfPkgTokenSpaceGuid.PcdOvmfFirmwareBlockSize = $(BLOCK_SIZE)</span><br><span class="line"></span><br><span class="line">SET gUefiOvmfPkgTokenSpaceGuid.PcdOvmfFlashNvStorageVariableBase = $(FW_BASE_ADDRESS)</span><br><span class="line">SET gEfiMdeModulePkgTokenSpaceGuid.PcdFlashNvStorageVariableSize = <span class="number">0xE000</span></span><br><span class="line"></span><br><span class="line">SET gUefiOvmfPkgTokenSpaceGuid.PcdOvmfFlashNvStorageEventLogBase = gUefiOvmfPkgTokenSpaceGuid.PcdOvmfFlashNvStorageVariableBase + gEfiMdeModulePkgTokenSpaceGuid.PcdFlashNvStorageVariableSize</span><br><span class="line">SET gUefiOvmfPkgTokenSpaceGuid.PcdOvmfFlashNvStorageEventLogSize = $(BLOCK_SIZE)</span><br><span class="line"></span><br><span class="line">SET gUefiOvmfPkgTokenSpaceGuid.PcdOvmfFlashNvStorageFtwWorkingBase = gUefiOvmfPkgTokenSpaceGuid.PcdOvmfFlashNvStorageEventLogBase + gUefiOvmfPkgTokenSpaceGuid.PcdOvmfFlashNvStorageEventLogSize</span><br><span class="line">SET gEfiMdeModulePkgTokenSpaceGuid.PcdFlashNvStorageFtwWorkingSize = $(BLOCK_SIZE)</span><br><span class="line"></span><br><span class="line">SET gUefiOvmfPkgTokenSpaceGuid.PcdOvmfFlashNvStorageFtwSpareBase = gUefiOvmfPkgTokenSpaceGuid.PcdOvmfFlashNvStorageFtwWorkingBase + gEfiMdeModulePkgTokenSpaceGuid.PcdFlashNvStorageFtwWorkingSize</span><br><span class="line">SET gEfiMdeModulePkgTokenSpaceGuid.PcdFlashNvStorageFtwSpareSize = <span class="number">0x1000</span></span><br></pre></td></tr></table></figure></p>
+<p>通过OvmfPkg.fdf.inc可以看出，编译RELEASE版本的OVMF时， FW_BASE_ADDRESS（固件基址）被定义为0xFFF00000， FW_SIZE被定义为0x00100000（1 M）。</p>
+<h4 id="[FD]">[FD]</h4><p>每个[FD]定义一个flash device image。flash device image可以是一个移动介质的可启动Image，或者系统ROM Image，也可以是用于更新系统ROM的Update(“Capsule”) Image。<br>每个.inf文件可以有多个[FD],每个[FD]生成一个.fd镜像文件。例如OvmfPkgX64.fdf文件定义了[FD.OVMF]、[FD.OVMF_VARS]、[FD.OVMF_CODE]、[FD.MEMFD]，编译后会生成OVMF.FD、OVMF_VARS.FD、OVMF_CODE.FD、MEMFD.FD四个镜像文件。</p>
+<h5 id="TOKEN">TOKEN</h5><p>[FD]块以TOKEN语句开始，用于定义本FD的基本属性，每一行定义一个Token，基本语法如下：<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Token = VALUE [| PcdName]</span><br></pre></td></tr></table></figure></p>
+<p>有效的Token包括以下5个</p>
+<table>
+<thead>
+<tr>
+<th>Token</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BaseAddress</td>
+<td>FLASH Device的基址</td>
+</tr>
+<tr>
+<td>Size</td>
+<td>FLASH Device的大小</td>
+</tr>
+<tr>
+<td>ErasePolarity</td>
+<td></td>
+</tr>
+<tr>
+<td>BlockSize</td>
+<td></td>
+</tr>
+<tr>
+<td>NumBlocks</td>
+<td>默认值为1</td>
+</tr>
+</tbody>
+</table>
+<p>BlockSize可以出现多次，$\sum_{i=0}^{n} BlockSize_i * NumBlocks_i$必须等于Size。<br>例如Nt32PKG.fdf文件中<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[FD.Nt32]</span><br><span class="line">BaseAddress   = <span class="number">0x0</span>|gEfiNt32PkgTokenSpaceGuid.PcdWinNtFdBaseAddress  </span><br><span class="line">Size          = <span class="number">0x002a0000</span> </span><br><span class="line">ErasePolarity = <span class="number">1</span></span><br><span class="line">BlockSize     = <span class="number">0x10000</span></span><br><span class="line">NumBlocks     = <span class="number">0x2a</span></span><br></pre></td></tr></table></figure></p>
+<p>NT32PKG生成的NT32.fd基址为0，在程序中可以通过PCD的gEfiNt32PkgTokenSpaceGuid.PcdWinNtFdBaseAddress访问这个值。大小为0x002a0000 = 0x10000 <em> 0x2a。<br>再如下例，Size(0x102000) = 0x10000 </em> 16  + 0x1000 * 2<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">[FD.FdMain]</span><br><span class="line">BaseAddress = <span class="number">0xFFF00000</span> | \</span><br><span class="line">gEfiMyPlatformTokenSpaceGuid.PcdFlashAreaBaseAddress</span><br><span class="line">Size = <span class="number">0x102000</span></span><br><span class="line">ErasePolarity = <span class="number">1</span></span><br><span class="line">BlockSize = <span class="number">0x10000</span></span><br><span class="line">NumBlocks = <span class="number">16</span></span><br><span class="line">BlockSize = <span class="number">0x1000</span></span><br><span class="line">NumBlocks = <span class="number">2</span></span><br></pre></td></tr></table></figure></p>
+<p>接着Token的是可选的DEFINE和SET定义，用于定义本[FD]块内有效的宏和PCD。<br>然后是Region列表，每个Region定义了位置、大小及其中的内容，格式为<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Offset|Size</span><br><span class="line">[TokenSpaceGuidCName.PcdOffsetCName|TokenSpaceGuidCName.PcdSizeCName]?</span><br><span class="line">[RegionType]?</span><br></pre></td></tr></table></figure></p>
+<p>第一行定义了本Region的偏移位置和大小。<br>第二行和第三行为可选项。<br>第二行定义对应的PCD值，相当于<br>SET TokenSpaceGuidCName.PcdOffsetCName = Offset<br>SET TokenSpaceGuidCName.PcdSizeCName = Size<br>第三行定义本Region包含的内容。内容可以为数据（Data），也可以是FV（Firmware Volume）。<br>所有的Region必须按偏移地址升序排列，Region之间不得重叠。<br>例如OvmfPkg.fdf.inc文件的[FD.OVMF]块：<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">[FD.OVMF]</span><br><span class="line">BaseAddress   = $(FW_BASE_ADDRESS)</span><br><span class="line">Size          = $(FW_SIZE)</span><br><span class="line">ErasePolarity = <span class="number">1</span></span><br><span class="line">BlockSize     = $(BLOCK_SIZE)</span><br><span class="line">NumBlocks     = $(FW_BLOCKS)</span><br><span class="line"></span><br><span class="line">!include VarStore.fdf.inc</span><br><span class="line"></span><br><span class="line">$(VARS_SIZE)|$(FVMAIN_SIZE)</span><br><span class="line">FV = FVMAIN_COMPACT</span><br><span class="line"></span><br><span class="line">$(SECFV_OFFSET)|$(SECFV_SIZE)</span><br><span class="line">FV = SECFV</span><br></pre></td></tr></table></figure></p>
+<p>通过！include VarStore.fdf.inc引入了数据Region，数据Reigon后是两个Fv。编译Release版本OVMF时，这两个Region为<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="number">0x20000</span>|<span class="number">0x000CC000</span></span><br><span class="line">FV = FVMAIN_COMPACT</span><br><span class="line"></span><br><span class="line"><span class="number">0x000EC000</span>|<span class="number">0x14000</span></span><br><span class="line">FV = SECFV</span><br></pre></td></tr></table></figure></p>
+<p>1M的ovmf.fd内容组织如下：</p>
+<table>
+<thead>
+<tr>
+<th>地址区间</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0x00000 ~ 0x01FFFF</td>
+<td>Data</td>
+</tr>
+<tr>
+<td>0x20000 ~ 0x0EBFFF</td>
+<td>FVMAIN_COMPACT</td>
+</tr>
+<tr>
+<td>0xEC000 ~ 0x100000</td>
+<td>SECFV</td>
+</tr>
+</tbody>
+</table>
+<p>再来看OVMF.FD的数据区，定义在文件VarStore.fdf.inc中,详细大家已经掌握了其格式。<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br></pre></td><td class="code"><pre><span class="line"><span class="number">0x00000000</span>|<span class="number">0x0000e000</span></span><br><span class="line"><span class="preprocessor">#NV_VARIABLE_STORE</span></span><br><span class="line">DATA = &#123;</span><br><span class="line">  <span class="preprocessor">## This is the EFI_FIRMWARE_VOLUME_HEADER</span></span><br><span class="line">  <span class="preprocessor"># ZeroVector []</span></span><br><span class="line">  <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>,</span><br><span class="line">  <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>,</span><br><span class="line">  <span class="preprocessor"># FileSystemGuid: gEfiSystemNvDataFvGuid         =</span></span><br><span class="line">  <span class="preprocessor">#   &#123; <span class="number">0xFFF12B8D</span>, <span class="number">0x7696</span>, <span class="number">0x4C8B</span>,</span></span><br><span class="line">  <span class="preprocessor">#     &#123; <span class="number">0xA9</span>, <span class="number">0x85</span>, <span class="number">0x27</span>, <span class="number">0x47</span>, <span class="number">0x07</span>, <span class="number">0x5B</span>, <span class="number">0x4F</span>, <span class="number">0x50</span> &#125;&#125;</span></span><br><span class="line">  <span class="number">0x8D</span>, <span class="number">0x2B</span>, <span class="number">0xF1</span>, <span class="number">0xFF</span>, <span class="number">0x96</span>, <span class="number">0x76</span>, <span class="number">0x8B</span>, <span class="number">0x4C</span>,</span><br><span class="line">  <span class="number">0xA9</span>, <span class="number">0x85</span>, <span class="number">0x27</span>, <span class="number">0x47</span>, <span class="number">0x07</span>, <span class="number">0x5B</span>, <span class="number">0x4F</span>, <span class="number">0x50</span>,</span><br><span class="line">  <span class="preprocessor"># FvLength: <span class="number">0x20000</span></span></span><br><span class="line">  <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x02</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>,</span><br><span class="line">  <span class="preprocessor"># Signature <span class="string">"_FVH"</span>       # Attributes</span></span><br><span class="line">  <span class="number">0x5f</span>, <span class="number">0x46</span>, <span class="number">0x56</span>, <span class="number">0x48</span>, <span class="number">0xff</span>, <span class="number">0xfe</span>, <span class="number">0x04</span>, <span class="number">0x00</span>,</span><br><span class="line">  <span class="preprocessor"># HeaderLength # CheckSum # ExtHeaderOffset #Reserved #Revision</span></span><br><span class="line">  <span class="number">0x48</span>, <span class="number">0x00</span>, <span class="number">0x19</span>, <span class="number">0xF9</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x02</span>,</span><br><span class="line">  <span class="preprocessor"># Blockmap[<span class="number">0</span>]: <span class="number">0x20</span> Blocks * <span class="number">0x1000</span> Bytes / Block</span></span><br><span class="line">  <span class="number">0x20</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x10</span>, <span class="number">0x00</span>, <span class="number">0x00</span>,</span><br><span class="line">  <span class="preprocessor"># Blockmap[<span class="number">1</span>]: End</span></span><br><span class="line">  <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>,</span><br><span class="line">  <span class="preprocessor">## This is the VARIABLE_STORE_HEADER</span></span><br><span class="line">!<span class="keyword">if</span> $(SECURE_BOOT_ENABLE) == TRUE</span><br><span class="line">  <span class="preprocessor"># Signature: gEfiAuthenticatedVariableGuid =</span></span><br><span class="line">  <span class="preprocessor">#   &#123; <span class="number">0xaaf32c78</span>, <span class="number">0x947b</span>, <span class="number">0x439a</span>,</span></span><br><span class="line">  <span class="preprocessor">#     &#123; <span class="number">0xa1</span>, <span class="number">0x80</span>, <span class="number">0x2e</span>, <span class="number">0x14</span>, <span class="number">0x4e</span>, <span class="number">0xc3</span>, <span class="number">0x77</span>, <span class="number">0x92</span> &#125;&#125;</span></span><br><span class="line">  <span class="number">0x78</span>, <span class="number">0x2c</span>, <span class="number">0xf3</span>, <span class="number">0xaa</span>, <span class="number">0x7b</span>, <span class="number">0x94</span>, <span class="number">0x9a</span>, <span class="number">0x43</span>,</span><br><span class="line">  <span class="number">0xa1</span>, <span class="number">0x80</span>, <span class="number">0x2e</span>, <span class="number">0x14</span>, <span class="number">0x4e</span>, <span class="number">0xc3</span>, <span class="number">0x77</span>, <span class="number">0x92</span>,</span><br><span class="line">!<span class="keyword">else</span></span><br><span class="line">  <span class="preprocessor"># Signature: gEfiVariableGuid =</span></span><br><span class="line">  <span class="preprocessor">#   &#123; <span class="number">0xddcf3616</span>, <span class="number">0x3275</span>, <span class="number">0x4164</span>,</span></span><br><span class="line">  <span class="preprocessor">#     &#123; <span class="number">0x98</span>, <span class="number">0xb6</span>, <span class="number">0xfe</span>, <span class="number">0x85</span>, <span class="number">0x70</span>, <span class="number">0x7f</span>, <span class="number">0xfe</span>, <span class="number">0x7d</span> &#125;&#125;</span></span><br><span class="line">  <span class="number">0x16</span>, <span class="number">0x36</span>, <span class="number">0xcf</span>, <span class="number">0xdd</span>, <span class="number">0x75</span>, <span class="number">0x32</span>, <span class="number">0x64</span>, <span class="number">0x41</span>,</span><br><span class="line">  <span class="number">0x98</span>, <span class="number">0xb6</span>, <span class="number">0xfe</span>, <span class="number">0x85</span>, <span class="number">0x70</span>, <span class="number">0x7f</span>, <span class="number">0xfe</span>, <span class="number">0x7d</span>,</span><br><span class="line">!endif</span><br><span class="line">  <span class="preprocessor"># Size: <span class="number">0xe000</span> (gEfiMdeModulePkgTokenSpaceGuid.PcdFlashNvStorageVariableSize) -</span></span><br><span class="line">  <span class="preprocessor">#         <span class="number">0x48</span> (size of EFI_FIRMWARE_VOLUME_HEADER) = <span class="number">0xdfb8</span></span></span><br><span class="line">  <span class="preprocessor"># This can speed up the Variable Dispatch a bit.</span></span><br><span class="line">  <span class="number">0xB8</span>, <span class="number">0xDF</span>, <span class="number">0x00</span>, <span class="number">0x00</span>,</span><br><span class="line">  <span class="preprocessor"># FORMATTED: <span class="number">0x5A</span> #HEALTHY: <span class="number">0xFE</span> #Reserved: UINT16 #Reserved1: UINT32</span></span><br><span class="line">  <span class="number">0x5A</span>, <span class="number">0xFE</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="number">0x0000e000</span>|<span class="number">0x00001000</span></span><br><span class="line"><span class="preprocessor">#NV_EVENT_LOG</span></span><br><span class="line"></span><br><span class="line"><span class="number">0x0000f000</span>|<span class="number">0x00001000</span></span><br><span class="line"><span class="preprocessor">#NV_FTW_WORKING</span></span><br><span class="line">DATA = &#123;</span><br><span class="line">  <span class="preprocessor"># EFI_FAULT_TOLERANT_WORKING_BLOCK_HEADER-&gt;Signature = gEdkiiWorkingBlockSignatureGuid         =</span></span><br><span class="line">  <span class="preprocessor">#  &#123; <span class="number">0x9e58292b</span>, <span class="number">0x7c68</span>, <span class="number">0x497d</span>, &#123; <span class="number">0xa0</span>, <span class="number">0xce</span>, <span class="number">0x65</span>,  <span class="number">0x0</span>, <span class="number">0xfd</span>, <span class="number">0x9f</span>, <span class="number">0x1b</span>, <span class="number">0x95</span> &#125;&#125;</span></span><br><span class="line">  <span class="number">0x2b</span>, <span class="number">0x29</span>, <span class="number">0x58</span>, <span class="number">0x9e</span>, <span class="number">0x68</span>, <span class="number">0x7c</span>, <span class="number">0x7d</span>, <span class="number">0x49</span>,</span><br><span class="line">  <span class="number">0xa0</span>, <span class="number">0xce</span>, <span class="number">0x65</span>,  <span class="number">0x0</span>, <span class="number">0xfd</span>, <span class="number">0x9f</span>, <span class="number">0x1b</span>, <span class="number">0x95</span>,</span><br><span class="line">  <span class="preprocessor"># Crc:UINT32            #WorkingBlockValid:<span class="number">1</span>, WorkingBlockInvalid:<span class="number">1</span>, Reserved</span></span><br><span class="line">  <span class="number">0x2c</span>, <span class="number">0xaf</span>, <span class="number">0x2c</span>, <span class="number">0x64</span>, <span class="number">0xFE</span>, <span class="number">0xFF</span>, <span class="number">0xFF</span>, <span class="number">0xFF</span>,</span><br><span class="line">  <span class="preprocessor"># WriteQueueSize: UINT64</span></span><br><span class="line">  <span class="number">0xE0</span>, <span class="number">0x0F</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="number">0x00010000</span>|<span class="number">0x00010000</span></span><br><span class="line"><span class="preprocessor">#NV_FTW_SPAR</span></span><br></pre></td></tr></table></figure></p>
+<h4 id="[FV]">[FV]</h4><p>下面来看在FD中作为Region的FV(Firmare Volume)。一个FV定义了一个固件卷，其内容包含一些列二进制Image，这些Image按[FV]中排列的顺序排列在最终生成固件中。<br>[FV.UiFvName]中UiFvName用于标示这个FV，通过 FV = UiFvName可以在其他FV和FD中引用UiFvName。<br>先睹为快，下面是[FV.SECFV]<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">[FV.SECFV]</span><br><span class="line">BlockSize          = <span class="number">0x1000</span></span><br><span class="line">FvAlignment        = <span class="number">16</span></span><br><span class="line">ERASE_POLARITY     = <span class="number">1</span></span><br><span class="line">MEMORY_MAPPED      = TRUE</span><br><span class="line">STICKY_WRITE       = TRUE</span><br><span class="line">LOCK_CAP           = TRUE</span><br><span class="line">LOCK_STATUS        = TRUE</span><br><span class="line">WRITE_DISABLED_CAP = TRUE</span><br><span class="line">WRITE_ENABLED_CAP  = TRUE</span><br><span class="line">WRITE_STATUS       = TRUE</span><br><span class="line">WRITE_LOCK_CAP     = TRUE</span><br><span class="line">WRITE_LOCK_STATUS  = TRUE</span><br><span class="line">READ_DISABLED_CAP  = TRUE</span><br><span class="line">READ_ENABLED_CAP   = TRUE</span><br><span class="line">READ_STATUS        = TRUE</span><br><span class="line">READ_LOCK_CAP      = TRUE</span><br><span class="line">READ_LOCK_STATUS   = TRUE</span><br><span class="line"></span><br><span class="line"><span class="preprocessor">#</span></span><br><span class="line"><span class="preprocessor"># SEC Phase modules</span></span><br><span class="line"><span class="preprocessor">#</span></span><br><span class="line">INF  OvmfPkg/Sec/SecMain.inf</span><br><span class="line">INF  RuleOverride=RESET_VECTOR OvmfPkg/ResetVector/ResetVector.inf</span><br></pre></td></tr></table></figure></p>
+<p>[FV]首先是Token，定义了本FV的基本属性，例如BlockSize等。<br>然后可以通过DEFINE 定义宏，通过SET定义PCD。<br>在然后就是内容列表了。内容可以通过INF、FILE定义，也可以通过SECTION、APRIORI包含一系列内容。</p>
+<h5 id="INF">INF</h5><p>通过INF包含一个模块，其语法如下<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">INF [Options] PathAndInfFileName</span><br></pre></td></tr></table></figure></p>
+<p>例如【FV.SECFV]中，通过INF 定义了SecMain.inf、ResetVector.inf，这两个模块将会按顺序存放在这个FV中。编译ResetVector.inf模块时将会按RESET_VECTOR指定的规则生成.efi文件。</p>
+<h5 id="FILE">FILE</h5><p>通过FILE包含文件的语法有两种，一种是包含单个文件，一种表示包含多个文件<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">FILE Type $(NAMED_GUID) [Options] FileName</span><br><span class="line">或者</span><br><span class="line">FILE Type = $(NAMED_GUID) [Options] &#123;</span><br><span class="line">SECTION SECTION_TYPE = FileName</span><br><span class="line">SECTION SECTION_TYPE = FileName</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>例如[FV.DXEFV]有如下内容。<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="preprocessor">#Type为FREEFORM，表示二进制内容。</span></span><br><span class="line">FILE FREEFORM = PCD(gEfiIntelFrameworkModulePkgTokenSpaceGuid.PcdLogoFile) &#123;</span><br><span class="line">  SECTION RAW = MdeModulePkg/Logo/Logo.bmp</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">FILE DRIVER = <span class="number">5</span>D695E11-<span class="number">9</span>B3F-<span class="number">4</span>b83-B25F-<span class="number">4</span>A8D5D69BE07 &#123;</span><br><span class="line">  SECTION PE32 = Intel3<span class="number">.5</span>/EFIX64/E3507X2.EFI</span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure></p>
+<p>可用的Type包括：</p>
+<table>
+<thead>
+<tr>
+<th>TYPE</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RAW</td>
+<td></td>
+</tr>
+<tr>
+<td>FREEFORM</td>
+<td></td>
+</tr>
+<tr>
+<td>SEC</td>
+<td></td>
+</tr>
+<tr>
+<td>PEI_CORE</td>
+<td></td>
+</tr>
+<tr>
+<td>DXE_CORE</td>
+<td></td>
+</tr>
+<tr>
+<td>PEIM</td>
+<td></td>
+</tr>
+<tr>
+<td>DRIVER</td>
+<td></td>
+</tr>
+<tr>
+<td>COMBO_PEIM_DRIVER</td>
+<td></td>
+</tr>
+<tr>
+<td>SMM_CORE</td>
+<td></td>
+</tr>
+<tr>
+<td>DXE_SMM_DRIVER</td>
+<td></td>
+</tr>
+<tr>
+<td>APPLICATION</td>
+<td></td>
+</tr>
+<tr>
+<td>FV_IMAGE</td>
+<td></td>
+</tr>
+<tr>
+<td>DISPOSABLE</td>
+<td></td>
+</tr>
+<tr>
+<td>0x00~0xFF</td>
+</tr>
+</tbody>
+</table>
+<h3 id="OVMF-FD">OVMF.FD</h3><p>通过分析[FD.OVMF]及[FV.SECFV]可以知道，在生成的OVMF.FD文件中位于文件最后的是ResetVector.inf模块。OVMF.FD可以烧到系统ROM中作为系统固件。前面已经讲过开机时ROM将被映射到0xFFFFFFFF最靠后的内存中。那么第一条指令对应地址0xFFFFFFF0将位于ResetVector.inf模块。<br>ResetVector.inf内容如下：<br><figure class="highlight scheme"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="list">[<span class="keyword">Defines</span>]</span><br><span class="line">  INF_VERSION                    = <span class="number">0</span>x00010005</span><br><span class="line">  BASE_NAME                      = ResetVector</span><br><span class="line">  FILE_GUID                      = <span class="number">1</span>BA0062E-C779-4582-8566-336AE8F78F09</span><br><span class="line">  MODULE_TYPE                    = SEC</span><br><span class="line">  VERSION_STRING                 = <span class="number">1.1</span></span><br><span class="line"></span><br><span class="line"><span class="list">[<span class="keyword">Sources</span>]</span><br><span class="line">  ResetVector.nasmb</span><br><span class="line"></span><br><span class="line"><span class="list">[<span class="keyword">Packages</span>]</span><br><span class="line">  MdePkg/MdePkg.dec</span><br><span class="line">  UefiCpuPkg/UefiCpuPkg.dec</span><br><span class="line"></span><br><span class="line"><span class="list">[<span class="keyword">BuildOptions</span>]</span><br><span class="line">   *_*_IA32_NASMB_FLAGS = -I$<span class="list">(<span class="keyword">WORKSPACE</span>)</span>/UefiCpuPkg/ResetVector/Vtf0/</span><br><span class="line">   *_*_X64_NASMB_FLAGS = -I$<span class="list">(<span class="keyword">WORKSPACE</span>)</span>/UefiCpuPkg/ResetVector/Vtf0/</span></span></span></span></span><br></pre></td></tr></table></figure></p>
+<p>ResetVector.inf包含了源文件ResetVector.nasmb，内容如下：<br><figure class="highlight mojolicious"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line"><span class="xml"></span><span class="perl"><span class="variable">%ifndef</span> ARCH_IA32</span><span class="xml"></span><br><span class="line"></span><span class="perl">  <span class="variable">%ifndef</span> ARCH_X64</span><span class="xml"></span><br><span class="line">    #include <span class="tag">&lt;<span class="title">Base.h</span>&gt;</span></span><br><span class="line">    #if defined (MDE_CPU_IA32)</span><br><span class="line"></span><span class="perl">      <span class="variable">%define</span> ARCH_IA32</span><span class="xml"></span><br><span class="line">    #elif defined (MDE_CPU_X64)</span><br><span class="line"></span><span class="perl">      <span class="variable">%define</span> ARCH_X64</span><span class="xml"></span><br><span class="line">    #endif</span><br><span class="line"></span><span class="perl">  <span class="variable">%endif</span></span><span class="xml"></span><br><span class="line"></span><span class="perl"><span class="variable">%endif</span></span><span class="xml"></span><br><span class="line"></span><span class="perl"></span><br><span class="line"><span class="variable">%ifdef</span> ARCH_IA32</span><span class="xml"></span><br><span class="line"></span><span class="perl">  <span class="variable">%ifdef</span> ARCH_X64</span><span class="xml"></span><br><span class="line"></span><span class="perl">    <span class="variable">%error</span> <span class="string">"Only one of ARCH_IA32 or ARCH_X64 can be defined."</span></span><span class="xml"></span><br><span class="line"></span><span class="perl">  <span class="variable">%endif</span></span><span class="xml"></span><br><span class="line"></span><span class="perl"><span class="variable">%elifdef</span> ARCH_X64</span><span class="xml"></span><br><span class="line"></span><span class="perl"><span class="variable">%else</span></span><span class="xml"></span><br><span class="line"></span><span class="perl">  <span class="variable">%error</span> <span class="string">"Either ARCH_IA32 or ARCH_X64 must be defined."</span></span><span class="xml"></span><br><span class="line"></span><span class="perl"><span class="variable">%endif</span></span><span class="xml"></span><br><span class="line"></span><span class="perl"></span><br><span class="line"><span class="variable">%include</span> <span class="string">"CommonMacros.inc"</span></span><span class="xml"></span><br><span class="line"></span><span class="perl"></span><br><span class="line"><span class="variable">%include</span> <span class="string">"PostCodes.inc"</span></span><span class="xml"></span><br><span class="line"></span><span class="perl"></span><br><span class="line"><span class="variable">%ifdef</span> DEBUG_PORT8<span class="number">0</span></span><span class="xml"></span><br><span class="line"></span><span class="perl">  <span class="variable">%include</span> <span class="string">"Port80Debug.asm"</span></span><span class="xml"></span><br><span class="line"></span><span class="perl"><span class="variable">%elifdef</span> DEBUG_SERIAL</span><span class="xml"></span><br><span class="line"></span><span class="perl">  <span class="variable">%include</span> <span class="string">"SerialDebug.asm"</span></span><span class="xml"></span><br><span class="line"></span><span class="perl"><span class="variable">%else</span></span><span class="xml"></span><br><span class="line"></span><span class="perl">  <span class="variable">%include</span> <span class="string">"DebugDisabled.asm"</span></span><span class="xml"></span><br><span class="line"></span><span class="perl"><span class="variable">%endif</span></span><span class="xml"></span><br><span class="line"></span><span class="perl"></span><br><span class="line"><span class="variable">%include</span> <span class="string">"Ia32/SearchForBfvBase.asm"</span></span><span class="xml"></span><br><span class="line"></span><span class="perl"><span class="variable">%include</span> <span class="string">"Ia32/SearchForSecEntry.asm"</span></span><span class="xml"></span><br><span class="line"></span><span class="perl"></span><br><span class="line"><span class="variable">%ifdef</span> ARCH_X64</span><span class="xml"></span><br><span class="line"></span><span class="perl"><span class="variable">%include</span> <span class="string">"Ia32/Flat32ToFlat64.asm"</span></span><span class="xml"></span><br><span class="line"></span><span class="perl"><span class="variable">%include</span> <span class="string">"Ia32/PageTables64.asm"</span></span><span class="xml"></span><br><span class="line"></span><span class="perl"><span class="variable">%endif</span></span><span class="xml"></span><br><span class="line"></span><span class="perl"></span><br><span class="line"><span class="variable">%include</span> <span class="string">"Ia16/Real16ToFlat32.asm"</span></span><span class="xml"></span><br><span class="line"></span><span class="perl"><span class="variable">%include</span> <span class="string">"Ia16/Init16.asm"</span></span><span class="xml"></span><br><span class="line"></span><span class="perl"></span><br><span class="line"><span class="variable">%include</span> <span class="string">"Main.asm"</span></span><span class="xml"></span><br><span class="line"></span><span class="perl"></span><br><span class="line"><span class="variable">%include</span> <span class="string">"Ia16/ResetVectorVtf0.asm"</span></span><span class="xml"></span></span><br></pre></td></tr></table></figure></p>
+<p>位于最后的是ResetVectorVtf0.asm，其内容如下：<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">BITS    <span class="number">16</span></span><br><span class="line">ALIGN   <span class="number">16</span></span><br><span class="line">%<span class="function">ifdef ALIGN_TOP_TO_4K_FOR_PAGING</span><br><span class="line">    <span class="title">TIMES</span> <span class="params">(<span class="number">0x1000</span> - ($ - EndOfPageTables)</span> - 0x20) DB 0</span><br><span class="line">%endif</span><br><span class="line">applicationProcessorEntryPoint:</span><br><span class="line">    jmp     EarlyApInitReal16</span><br><span class="line">ALIGN   8</span><br><span class="line">    DD      0</span><br><span class="line">vtfSignature:</span><br><span class="line">    DB      'V', 'T', 'F', 0</span><br><span class="line">ALIGN   16</span><br><span class="line">resetVector:</span><br><span class="line"></span>; This is where the processor will begin execution</span><br><span class="line">;</span><br><span class="line">    nop</span><br><span class="line">    nop</span><br><span class="line">    jmp     EarlyBspInitReal16</span><br><span class="line"></span><br><span class="line">ALIGN   <span class="number">16</span></span><br><span class="line">fourGigabytes:</span><br></pre></td></tr></table></figure></p>
+<p>位于0xFFFFFFF0（fourGigabytes-16)处的是指标resetVector:，从此处开始的第一条有效指令是 jmp     EarlyBspInitReal16。<br>可以通过反汇编OVMF.fd验证，<br>OVMF.FD最后16字节为<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="number">0x000FFFF0</span> <span class="number">90</span> <span class="number">90</span> E9 AB FF <span class="number">90</span> <span class="number">90</span> <span class="number">90</span>  <span class="number">90</span> <span class="number">90</span> <span class="number">90</span> <span class="number">90</span> <span class="number">90</span> <span class="number">90</span> <span class="number">90</span> <span class="number">90</span></span><br></pre></td></tr></table></figure></p>
+<p>指令码90对应的指令正是nop，E9 AB FF对应的指令是 jmp FFAB, 跳转到EIP+(FFAB)处执行， E9 AB FF对应的EIP为0x000FFFF2,那么下一条指令的EIP为0x000FFFF5， FFAB是-0x55, 0x000FFFF5 - 0x55 = 0xFFFA0. 0xFFFA0正是EarlyBspInitReal16。编译后的汇编码位于OvmfX64\RELEASE_VS2010x86\X64\OvmfPkg\ResetVector\ResetVector\OUTPUT\ResetVector.lst文件中。<br><figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">                    &lt;1&gt; EarlyBspInitReal16:</span><br><span class="line">BF4250              &lt;1&gt;     mov     di, 'BP'</span><br><span class="line">EB0B                &lt;1&gt;     jmp     short Main16</span><br></pre></td></tr></table></figure></p>
+<p>OVMF.FD中偏移0xFFFA0处的地址码为：<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="number">0x00FFFA0</span> BF <span class="number">42</span> <span class="number">50</span> EB <span class="number">0</span>B BF <span class="number">41</span> <span class="number">50</span>  EB <span class="number">06</span> <span class="number">66</span> <span class="number">89</span> C4 E9 <span class="number">03</span> <span class="number">00</span></span><br></pre></td></tr></table></figure></p>
+<p>BF 42 50正是mov di, ‘BP’对应的指令码。<br>再往后就是CPU软件初始化的过程了。</p>
+
+      
+    </div>
+    <footer>
+      
+        
+        
+      
+      <div class="clearfix"></div>
+    </footer>
+  </div>
+</article>
+
+
+
+
+<ul class="page-direction" id="page-direction">
+    <li><a class="page-prev icon-chevron-sign-left" href="javascript:;" title="上一頁"></a></li>
+    <li><a class="page-next icon-chevron-sign-right" href="javascript:;" title="下一頁"></a></li>
+</ul>
+
+<nav id="pagination">
+  
+  
+  <div class="clearfix"></div>
+</nav></div></div>
+    <aside id="sidebar" class="alignright">
+  <div class="search">
+  <form action="//google.com/search" method="get" accept-charset="utf-8">
+    <input type="text" name="q" results="0" placeholder="搜尋">
+    <i class="icon-search"></i>
+    <input type="hidden" name="q" value="site:blog.biosuefi.com">
+  </form>
+</div>
+
+  
+
+  <div class="trace-invest">
+    <span>
+    </span>
+</div>
+
+
+  
+<div class="widget tag">
+  <h3 class="title">最新文章</h3>
+  <ul class="entry">
+    
+      <li>
+        <a href="/2015/08/23/reset-vector/"></a>
+      </li>
+    
+  </ul>
+</div>
+
+</aside>
+    <div class="clearfix"></div>
+  </div>
+  <div id="go-pg-top"><i class="icon-arrow-up"></i></div>
+  <footer id="footer" class="inner"><div class="alignleft">
+  
+  &copy; 2015 Dai Zhenghua
+  
+</div>
+<div class="clearfix"></div></footer>
+  <script src="/js/jquery.imagesloaded.min.js"></script>
+<script src="/js/gallery.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css" media="screen" type="text/css">
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+<script type="text/javascript" charset="utf-8" src="/js/page.js"></script>
+
+</body>
+
+</html>
