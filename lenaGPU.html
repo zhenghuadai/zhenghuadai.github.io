@@ -1,0 +1,126 @@
+<html>
+<head>
+<script src='./js/jquery-3.5.1.min.js'></script>
+<script src='./js/jquery-ui.min.js'></script>
+<script src='./js/lena.js'></script>
+<script src='./js/gpu-browser.js'></script>
+<script src='./js/lena-gpu.js'></script>
+<link rel='stylesheet' href='./css/jquery-ui.min.css' />
+<style>
+.ui-menu { width: 150px; }
+#menus .top-menu {
+    display:inline;
+    float:left;
+}
+#menus .top-menu-right {
+    display:inline;
+    float:right;
+}
+#display0{
+    margin-top:40px;
+    display:block;
+    position:absolute;
+}
+#image000{
+    margin:0;
+}
+#messagebox{
+    background: black;
+    color:white;
+}
+.stdsize{
+    width:640px;
+    height:480px;
+    display:inline;
+}
+.fullsize{
+    width:100%;
+    height:100%;
+}
+</style>
+</head>
+<body>
+
+<div id='body'>
+    <div id='menus'>
+        <div class='top-menu'>
+            <ul id='filemenu'>
+                <li> <div>file</div>
+                <ul>
+                    <li>
+                        <div id='loadimg'> Open </div>
+                        <input id='loadlocal' type='file' style='display:none'> </input>
+                    </li>
+
+                    <li class='ui-state-disabled'><div>Close</div></li>
+                </ul>
+                </li>
+            </ul>
+        </div>
+        <div class='top-menu'>
+            <ul id='viewmenu'>
+                <li> <div>view</div>
+                    <ul id='view_menus'>
+                    <li data-filter='full' cmd=0><div>full size</div></li>
+                    <li data-filter='640x480' cmd=1><div>640x480</div></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+        <div class='top-menu'>
+            <ul id='filtermenu'>
+                <li> <div>filter</div>
+                    <ul id='filter_menus'>
+                        <!-- 
+                            <li data-filter='grayscale'><div>grayscale</div></li> 
+                        -->
+                    </ul>
+                </li>
+            </ul>
+        </div>
+        <div class='top-menu'>
+            <ul id='edgemenu'>
+                <li> <div>edge</div>
+                    <ul id='edge_menus'>
+                        <!-- 
+                            <li data-filter='canny'><div>canny</div></li>
+                        -->
+                    </ul>
+                </li>
+            </ul>
+        </div>
+        <div class='top-menu'>
+            <label id="messagebox" class='ui-corner-all'></label>
+        </div>
+        <div class='top-menu-right' >
+            <label for="AddonToggleButton" title='Use last output as input'>Add On</label>
+            <input type="checkbox" id="AddonToggleButton" />
+        </div>
+        <div class='top-menu-right' >
+            <label for="GPUToggleButton">GPU</label>
+            <input type="checkbox" id="GPUToggleButton" />
+        </div>
+        <div class='top-menu-right' >
+            <div id='timediv'> <label id="time">0</label> ms </div>
+        </div>
+        <!-- 
+        <div class='top-menu-right' >
+            <div id='TestGPU'> <label >Test</label> </div>
+        </div>
+        -->
+
+    </div>
+    <div id='thumb'>
+    </div>
+    <div id='display0'>
+        <img id='image000' class='image display1' src='images/lenna.png' title0='Source Image'/>
+        <canvas id='canvasimg0' class='image display1' style='display:none'></canvas>
+        <canvas id='canvasCPU' class='canvas display1' title0='CPU Canvas'></canvas>
+        <canvas id='canvasGPU' class='canvas display1' title0='GPU Canvas'></canvas>
+    </div>
+    <script>
+    </script>
+<script src='./js/index.js'></script>
+</div>
+</body>
+</html>
