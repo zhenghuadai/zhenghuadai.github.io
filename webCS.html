@@ -234,7 +234,7 @@ text-overflow:ellipsis; overflow:hidden;
             }
 
             const t0 = performance.now();
-            cs_sgemm_naive.setUniform('MNK', N, N, N, N).run(cpuA, cpuB, cpuC);
+            cs_sgemm_naive.setUniform('MNK', M, N, K, 0).run(cpuA, cpuB, cpuC);
             const t1 = performance.now();
             t = t1 - t0;
             $('#time').html(t.toFixed(1).toString());
@@ -275,7 +275,7 @@ text-overflow:ellipsis; overflow:hidden;
         let cpuC = createArray(M*N);
         let webCS = new WebCS();
         let cs_sgemm = webCS.createShader(sgemmv1, {local_size:[8, 8, 1], groups:[M/8, N/8, 1]});
-        cs_sgemm.setUniform('MNK', N, N, N, N).run(cpuA, cpuB, cpuC);
+        cs_sgemm.setUniform('MNK', M, N, K, 0).run(cpuA, cpuB, cpuC);
         cs_sgemm.getData('C', cpuC);
                 `;
                 let btf2 = hljs.highlight('javascript', example_js);
