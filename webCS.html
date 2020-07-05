@@ -131,81 +131,81 @@ text-overflow:ellipsis; overflow:hidden;
     </div>
     <div id='thumb'>
     </div>
-    <div id='display0' style='display:none'>
-        <img id='image000' class='image display1' src='images/lenna.png' title0='Source Image'/>
-        <canvas id='canvasimg0' class='image display1' style='display:none'></canvas>
-        <canvas id='canvasCPU' class='canvas display1' title0='CPU Canvas'></canvas>
-        <canvas id='canvasGPU' class='canvas display1' title0='GPU Canvas'></canvas>
-    </div>
     <div id='display1' style='display:block'>
-        <xmp width="100%" class='code'>
-               <script src='http://zhenghuadai.github.io/js/webcs.js'></script>               
-        </xmp>
-        <pre class="prettyprint">
-        <code id='code0' class='code language-javascript'></code>
-        </pre>
+        <div id='code_div'>
+            <xmp width="100%" class='code'>
+              <script src='http://zhenghuadai.github.io/js/webcs.js'></script>               
+            </xmp>
+            <pre id='codes_block' class="prettyprint">
+              <!--
+              <code id='code_sgemm_naive' class='code example language-javascript'></code>
+              -->
+            </pre>
+        </div>
+        <div id='canvas_div'>
+          <canvas id='canvas2GPU' class='canvas display1' title0='GPU Canvas' width=640 height=480></canvas>
+        </div>
+    </div>
+    <div id='display0' style='display:block'>
+        <img id='image000' class='image display0' src='images/lenna.png' title0='Source Image' style='display:none'/>
+        <canvas id='canvasimg0' class='image display0' style='display:none'></canvas>
     </div>
     <script>
 
-    (function(){
     let webCS = null;
     let cs_sgemm_naive = null;
-    // file menu
-    (function() {
-        $('#loadimg').click(function() {
-            $('#loadlocal').click();
-        });
-        $('#loadlocal').on('change', function(ev) {
-            let input = ev.target;
-            if (input.files && input.files[0]) {
-                var reader = new FileReader();
-
-                reader.onload = function(e) {
-                    $('#image000').attr('src', e.target.result);
-                };
-
-                reader.readAsDataURL(input.files[0]);
+    let cs_texture = null;
+    let cs_texture2 = null;
+    let cs_kernels = {};
+    let glsl_kernels = {};
+    let App = {};
+    (function(){
+        let testcases = [
+                'sgemm_naive', 'texture', 'texture2'
+        ];
+        // clang-format off
+        function glsl_sgemm_naive(A,B,C){
+                return `
+                    // C[M, N] = A[M, K] * B[K, N]
+                    uint M = this.uniform.MNK.x, N = this.uniform.MNK.y, K = this.uniform.MNK.z;
+                    // Compute a single element C[thread.y, thread.x] by looping over k
+                    float sum = 0.0;
+                    for (uint k = 0u; k < K; k++)
+                    {
+                        sum += A[thread.y * K + k] * B[k * N + thread.x];
+                    }
+             
+                    // Store the result
+                    C[thread.y*N + thread.x] = sum;
+                `;
             }
-        });
-        $('#filemenu').menu();
-    })();
 
-
-    // view menu
-    $('#viewmenu').menu({
-        select: function(e, ui) {
-            let cmd = ui.item.attr('cmd');
-            if (cmd == 0) {
-            } else if (cmd == 1) {
+         function glsl_texture2(src, dst){
+                return `
+                ivec2 pos = ivec2(thread.xy);
+                vec4 pixel = imageLoad(src, pos);
+                vec4 invert = vec4(1.0 - pixel.x, 1.0 - pixel.y, 1.0 - pixel.z, 1.0);
+                imageStore(dst, pos, invert);
+                `;
             }
-            if (cmd != undefined) {
+         function glsl_texture(dst){
+                return `
+                ivec2 pos = ivec2(thread.xy);
+                float x = float(thread.x);
+                float y = float(thread.y);
+                imageStore(dst, pos, vec4(x / (y+1.0+x), y / (y+1.0+x),  0.0, 1.0));
+                `;
             }
-        }
-    });
+        // clang-format on
+        glsl_kernels.sgemm_naive = glsl_sgemm_naive;
+        glsl_kernels.texture     = glsl_texture;
+        glsl_kernels.texture2    = glsl_texture2;
 
-    function sgemmv1(A,B,C){
-            return `
-                // C[M, N] = A[M, K] * B[K, N]
-                uint M = this.uniform.MNK.x, N = this.uniform.MNK.y, K = this.uniform.MNK.z;
-                // Compute a single element C[thread.y, thread.x] by looping over k
-                float sum = 0.0;
-                for (uint k = 0u; k < K; k++)
-                {
-                    sum += A[thread.y * K + k] * B[k * N + thread.x];
-                }
-         
-                // Store the result
-                C[thread.y*N + thread.x] = sum;
-            `;
-        }
     // menus for example 
     (function() {
 
         // append menus
         (function appendmenu() {
-            let filters = [
-                'sgemm_naive'
-            ];
             function doone(thefilters, themenu) {
                 let ula = $('<ul/>');
                 thefilters.forEach(function(ele) {
@@ -215,9 +215,10 @@ text-overflow:ellipsis; overflow:hidden;
                 });
                 $(themenu).append(ula.children().detach());
             }
-            doone(filters, '#example_menus');
+            doone(testcases, '#example_menus');
         })();
-        function do_sgemm_naive(){
+        var do_cs = {
+        do_sgemm_naive:function (){
             var M = 64, N = 64, K = 64;
             var createArray= function ( n) { 
                 var buf = new Float32Array(n);
@@ -230,7 +231,7 @@ text-overflow:ellipsis; overflow:hidden;
             let cpuB = createArray(K*N);
             let cpuC = createArray(M*N);
             if(cs_sgemm_naive == null){
-                cs_sgemm_naive = webCS.createShader(sgemmv1, { local_size:[8, 8, 1], groups:[M/8, N/8, 1]});
+                cs_sgemm_naive = webCS.createShader(glsl_sgemm_naive, { local_size:[8, 8, 1], groups:[M/8, N/8, 1]});
             }
 
             const t0 = performance.now();
@@ -246,49 +247,115 @@ text-overflow:ellipsis; overflow:hidden;
                 let diff = result - acc;
                 result = result.toFixed(7);
                 diff = diff.toFixed(7);
-                showMessage(`Cgpu[${y},${x}] = ${result}; \u2003<br/> Cgpu[${y},${x}] - Ccpu[${y},${x}] : ${diff}`);
+                App.showMessage(`Cgpu[${y},${x}] = ${result}; \u2003<br/> Cgpu[${y},${x}] - Ccpu[${y},${x}] : ${diff}`);
             }
-            $("#code0").show();
+            $("#code_sgemm_naive").show();
 
+        },
+        do_texture:function(){
+            var X = 640, Y = 480, Z = 1;
+                //ivec2 storePos = ivec2(gl_GlobalInvocationID.xy);
+                //imageStore(dst, storePos, vec4(vec2(gl_WorkGroupID.xy) / vec2(gl_NumWorkGroups.xy), 0.0, 1.0));
+            if(cs_texture == null){
+                cs_texture = webCS.createShader(glsl_texture, { local_size:[8, 8, 1], groups:[X/8, Y/8, 1], params:{'dst':'texture'}});
+            }
+
+            cs_texture.run(null);
+
+            let tex = cs_texture.getTexture('dst');
+            webCS.present(tex);
+            $("#display1")[0].appendChild(webCS.canvas);
+        },
+
+        do_texture2: function(){
+            do_cs.do_texture();
+            var X = 640, Y = 480, Z = 1;
+            if(cs_texture2 == null){
+                cs_texture2 = webCS.createShader(glsl_texture2, { local_size:[8, 8, 1], groups:[X/8, Y/8, 1], params:{src:'texture', 'dst':'texture'}});
+            }
+
+            let texSrc = cs_texture.getTexture('dst');
+            cs_texture2.run(texSrc, null);
+
+            let tex = cs_texture2.getTexture('dst');
+            webCS.present(tex);
+            $("#display1")[0].appendChild(webCS.canvas);
         }
+		};
         function doExampleGPU(e, ui) {
             let myfilter = ui.item.attr('data-filter');
-            console.log(myfilter);
-            if(myfilter == 'sgemm_naive'){
-                do_sgemm_naive();
-            }
+            $(".code.example").hide();
+            $("#code_"+myfilter).show();
+            do_cs["do_" + myfilter]();
         }
         
         function setupExample(){
-            {
-                let btf = hljs.highlight('c++', sgemmv1.toString());
-                let example_js = `
+            let example_js= {}
+                // clang-format off
+            example_js.sgemm_naive = `
 
-        let M = 64, N = 64, K =64;
-        var createArray = function ( n) { 
-            var buf = new Float32Array(n);
-            for(var i = 0; i < n; i++){buf[i] = Math.random();}
-            return buf;
-        };
-        let cpuA = createArray(M*K);
-        let cpuB = createArray(K*N);
-        let cpuC = createArray(M*N);
-        let webCS = new WebCS();
-        let cs_sgemm = webCS.createShader(sgemmv1, {local_size:[8, 8, 1], groups:[M/8, N/8, 1]});
-        cs_sgemm.setUniform('MNK', M, N, K, 0).run(cpuA, cpuB, cpuC);
-        cs_sgemm.getData('C', cpuC);
+            let M = 64, N = 64, K =64;
+            var createArray = function ( n) { 
+                var buf = new Float32Array(n);
+                for(var i = 0; i < n; i++){buf[i] = Math.random();}
+                return buf;
+            };
+            let cpuA = createArray(M*K);
+            let cpuB = createArray(K*N);
+            let cpuC = createArray(M*N);
+            let webCS = new WebCS();
+            let cs_sgemm = webCS.createShader(glsl_sgemm_naive, {local_size:[8, 8, 1], groups:[M/8, N/8, 1]});
+            cs_sgemm.setUniform('MNK', M, N, K, 0).run(cpuA, cpuB, cpuC);
+            cs_sgemm.getData('C', cpuC);
                 `;
-                let btf2 = hljs.highlight('javascript', example_js);
-                $("#code0").html( btf.value + btf2.value.replace('sgemmv1', '<span class="hljs-title">sgemmv1</span>'));
-            }
-            //$("#code0").hide();
+            // clang-format on
+            example_js.texture = `
+
+            var X = 640, Y = 480, Z = 1;
+            let webCS = new WebCS({width:X, height:Y});
+            // or let webCS = new WebCS({canvas:$("#canvas2GPU")[0]});
+            let cs_texture = webCS.createShader(glsl_texture, { local_size:[8, 8, 1], groups:[X/8, Y/8, 1], params:{'dst':'texture'}});
+
+            cs_texture.run(null);
+
+            let tex = cs_texture.getTexture('dst');
+            webCS.present(tex);
+            $("#display1")[0].appendChild(webCS.canvas);
+            `;
+            example_js.texture2 = `
+
+            do_cs.do_texture();
+            var X = 640, Y = 480, Z = 1;
+            let webCS = new WebCS({width:X, height:Y});
+            // or let webCS = new WebCS({canvas:$("#canvas2GPU")[0]});
+            let cs_texture2 = webCS.createShader(glsl_texture2, { local_size:[8, 8, 1], groups:[X/8, Y/8, 1], params:{src:'texture', 'dst':'texture'}});
+
+            let texSrc = cs_texture.getTexture('dst');
+            cs_texture2.run(texSrc, null);
+
+            let tex = cs_texture2.getTexture('dst');
+            webCS.present(tex);
+            $("#display1")[0].appendChild(webCS.canvas);
+            `;
+            //$("#code_sgemm_naive").hide();
+            let codes_block = $('#codes_block');
+            testcases.forEach(function(ele) {
+                let code_ele = $(`<code id='code_${ele}' class='code example language-javascript'></code>`)
+                let btf = hljs.highlight('c++', glsl_kernels[ele].toString());
+                let btf2 = hljs.highlight('javascript', example_js[ele]);
+                code_ele.html( btf.value + btf2.value.replace('glsl_'+ele, '<span class="hljs-title">glsl_'+ ele +'</span>'));
+                codes_block.append(code_ele);
+            });
+            $(".code.example").hide();
+            $("#code_sgemm_naive").show();
         }
         setupExample();
         
         function doExample(e, ui) {
             let myfilter = ui.item.attr('data-filter');
             if(webCS == null){
-                webCS = new WebCS();
+                webCS = new WebCS({canvas:$("#canvas2GPU")[0]});
+                //webCS = new WebCS();
             }
             if(myfilter == null){
                 return;
@@ -300,38 +367,9 @@ text-overflow:ellipsis; overflow:hidden;
         }
         $('#examplemenu').menu({select: doExample});
     })();
-
-    // right buttons
-    (function() {
-        $('#AddonToggleButton').button();
-        $('#GPUToggleButton').button();
-        $('#timediv').button();
-        $('#TestGPU').button();
-    })();
-
-    // message box
-    function showMessage(txt) {
-        $('#messagebox').html(txt);
-        $('#messagebox').show();
-        if (txt && txt.length > 0) {
-			$('#messagebox').removeClass('minimize');
-            $('#messagebox').addClass('ui-tooltip');
-        } else {
-            $('#messagebox').removeClass('ui-tooltip');
-        }
-        setTimeout(function(){$('#messagebox').addClass('minimize');}, 5000);
-    };
-	$('#messagebox').hover(
-            function() {
-				$('#messagebox').removeClass('minimize');
-            },
-            function() {
-				setTimeout(function(){$('#messagebox').addClass('minimize');}, 2000);
-            });
-
-    $('#meesagebox').button();
     })();
     </script>
+<script src='./js/webCS.html.js'></script>
 </div>
 </body>
 </html>
