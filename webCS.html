@@ -33,6 +33,11 @@
     height:480px;
     display:inline;
 }
+.cssize{
+    width:512px;
+    height:512px;
+    display:inline;
+}
 .fullsize{
     width:100%;
     height:100%;
@@ -65,7 +70,7 @@ text-overflow:ellipsis; overflow:hidden;
 
 <div id='body'>
     <div id='menus'>
-        <div class='top-menu' style='display:none'>
+        <div class='top-menu' style='display:inline'>
             <ul id='filemenu'>
                 <li> <div>file</div>
                 <ul>
@@ -85,6 +90,7 @@ text-overflow:ellipsis; overflow:hidden;
                     <ul id='view_menus'>
                     <li data-filter='full' cmd=0><div>full size</div></li>
                     <li data-filter='640x480' cmd=1><div>640x480</div></li>
+                    <li data-filter='512x512' cmd=1><div>512x512</div></li>
                     </ul>
                 </li>
             </ul>
@@ -143,12 +149,12 @@ text-overflow:ellipsis; overflow:hidden;
             </pre>
         </div>
         <div id='canvas_div'>
-          <canvas id='canvas2GPU' class='canvas display1' title0='GPU Canvas' width=640 height=480></canvas>
+          <canvas id='canvas2GPU' class='canvas display1' title0='GPU Canvas' width=512 height=512></canvas>
         </div>
     </div>
-    <div id='display0' style='display:block'>
-        <img id='image000' class='image display0' src='images/lenna.png' title0='Source Image' style='display:none'/>
-        <canvas id='canvasimg0' class='image display0' style='display:none'></canvas>
+    <div id='display0' style='display:none'>
+        <img id='image000' class='image display0 cssize' src='images/lenna.png' title0='Source Image' style='display:block'/>
+        <canvas id='canvasimg0' class='image display0' style='display:block'></canvas>
     </div>
     <script>
 
@@ -159,9 +165,10 @@ text-overflow:ellipsis; overflow:hidden;
     let cs_kernels = {};
     let glsl_kernels = {};
     let App = {};
+    var X = 512, Y = 512, Z = 1;
     (function(){
         let testcases = [
-                'sgemm_naive', 'texture', 'texture2'
+                'sgemm_naive', 'texture', 'texture2', 'img_texture'
         ];
         // clang-format off
         function glsl_sgemm_naive(A,B,C){
@@ -180,7 +187,7 @@ text-overflow:ellipsis; overflow:hidden;
                 `;
             }
 
-         function glsl_texture2(src, dst){
+        function glsl_texture2(src, dst){
                 return `
                 ivec2 pos = ivec2(thread.xy);
                 vec4 pixel = imageLoad(src, pos);
@@ -188,7 +195,7 @@ text-overflow:ellipsis; overflow:hidden;
                 imageStore(dst, pos, invert);
                 `;
             }
-         function glsl_texture(dst){
+        function glsl_texture(dst){
                 return `
                 ivec2 pos = ivec2(thread.xy);
                 float x = float(thread.x);
@@ -200,6 +207,7 @@ text-overflow:ellipsis; overflow:hidden;
         glsl_kernels.sgemm_naive = glsl_sgemm_naive;
         glsl_kernels.texture     = glsl_texture;
         glsl_kernels.texture2    = glsl_texture2;
+        glsl_kernels.img_texture    = glsl_texture2;
 
     // menus for example 
     (function() {
@@ -253,7 +261,6 @@ text-overflow:ellipsis; overflow:hidden;
 
         },
         do_texture:function(){
-            var X = 640, Y = 480, Z = 1;
                 //ivec2 storePos = ivec2(gl_GlobalInvocationID.xy);
                 //imageStore(dst, storePos, vec4(vec2(gl_WorkGroupID.xy) / vec2(gl_NumWorkGroups.xy), 0.0, 1.0));
             if(cs_texture == null){
@@ -269,12 +276,24 @@ text-overflow:ellipsis; overflow:hidden;
 
         do_texture2: function(){
             do_cs.do_texture();
-            var X = 640, Y = 480, Z = 1;
             if(cs_texture2 == null){
                 cs_texture2 = webCS.createShader(glsl_texture2, { local_size:[8, 8, 1], groups:[X/8, Y/8, 1], params:{src:'texture', 'dst':'texture'}});
             }
 
             let texSrc = cs_texture.getTexture('dst');
+            cs_texture2.run(texSrc, null);
+
+            let tex = cs_texture2.getTexture('dst');
+            webCS.present(tex);
+            $("#display1")[0].appendChild(webCS.canvas);
+        },
+
+        do_img_texture: function(){
+            if(cs_texture2 == null){
+                cs_texture2 = webCS.createShader(glsl_texture2, { local_size:[8, 8, 1], groups:[X/8, Y/8, 1], params:{src:'texture', 'dst':'texture'}});
+            }
+
+            let texSrc = $('#image000')[0];
             cs_texture2.run(texSrc, null);
 
             let tex = cs_texture2.getTexture('dst');
@@ -288,69 +307,6 @@ text-overflow:ellipsis; overflow:hidden;
             $("#code_"+myfilter).show();
             do_cs["do_" + myfilter]();
         }
-        
-        function setupExample(){
-            let example_js= {}
-                // clang-format off
-            example_js.sgemm_naive = `
-
-            let M = 64, N = 64, K =64;
-            var createArray = function ( n) { 
-                var buf = new Float32Array(n);
-                for(var i = 0; i < n; i++){buf[i] = Math.random();}
-                return buf;
-            };
-            let cpuA = createArray(M*K);
-            let cpuB = createArray(K*N);
-            let cpuC = createArray(M*N);
-            let webCS = new WebCS();
-            let cs_sgemm = webCS.createShader(glsl_sgemm_naive, {local_size:[8, 8, 1], groups:[M/8, N/8, 1]});
-            cs_sgemm.setUniform('MNK', M, N, K, 0).run(cpuA, cpuB, cpuC);
-            cs_sgemm.getData('C', cpuC);
-                `;
-            // clang-format on
-            example_js.texture = `
-
-            var X = 640, Y = 480, Z = 1;
-            let webCS = new WebCS({width:X, height:Y});
-            // or let webCS = new WebCS({canvas:$("#canvas2GPU")[0]});
-            let cs_texture = webCS.createShader(glsl_texture, { local_size:[8, 8, 1], groups:[X/8, Y/8, 1], params:{'dst':'texture'}});
-
-            cs_texture.run(null);
-
-            let tex = cs_texture.getTexture('dst');
-            webCS.present(tex);
-            $("#display1")[0].appendChild(webCS.canvas);
-            `;
-            example_js.texture2 = `
-
-            do_cs.do_texture();
-            var X = 640, Y = 480, Z = 1;
-            let webCS = new WebCS({width:X, height:Y});
-            // or let webCS = new WebCS({canvas:$("#canvas2GPU")[0]});
-            let cs_texture2 = webCS.createShader(glsl_texture2, { local_size:[8, 8, 1], groups:[X/8, Y/8, 1], params:{src:'texture', 'dst':'texture'}});
-
-            let texSrc = cs_texture.getTexture('dst');
-            cs_texture2.run(texSrc, null);
-
-            let tex = cs_texture2.getTexture('dst');
-            webCS.present(tex);
-            $("#display1")[0].appendChild(webCS.canvas);
-            `;
-            //$("#code_sgemm_naive").hide();
-            let codes_block = $('#codes_block');
-            testcases.forEach(function(ele) {
-                let code_ele = $(`<code id='code_${ele}' class='code example language-javascript'></code>`)
-                let btf = hljs.highlight('c++', glsl_kernels[ele].toString());
-                let btf2 = hljs.highlight('javascript', example_js[ele]);
-                code_ele.html( btf.value + btf2.value.replace('glsl_'+ele, '<span class="hljs-title">glsl_'+ ele +'</span>'));
-                codes_block.append(code_ele);
-            });
-            $(".code.example").hide();
-            $("#code_sgemm_naive").show();
-        }
-        setupExample();
-        
         function doExample(e, ui) {
             let myfilter = ui.item.attr('data-filter');
             if(webCS == null){
@@ -366,7 +322,85 @@ text-overflow:ellipsis; overflow:hidden;
             }
         }
         $('#examplemenu').menu({select: doExample});
+
     })();
+        
+    (function setupExample(){
+        let example_js= {}
+            // clang-format off
+        example_js.sgemm_naive = `
+
+        let M = 64, N = 64, K =64;
+        var createArray = function ( n) { 
+            var buf = new Float32Array(n);
+            for(var i = 0; i < n; i++){buf[i] = Math.random();}
+            return buf;
+        };
+        let cpuA = createArray(M*K);
+        let cpuB = createArray(K*N);
+        let cpuC = createArray(M*N);
+        let webCS = new WebCS();
+        let cs_sgemm = webCS.createShader(glsl_sgemm_naive, {local_size:[8, 8, 1], groups:[M/8, N/8, 1]});
+        cs_sgemm.setUniform('MNK', M, N, K, 0).run(cpuA, cpuB, cpuC);
+        cs_sgemm.getData('C', cpuC);
+            `;
+        // clang-format on
+        example_js.texture = `
+
+        var X = 512, Y = 512, Z = 1;
+        let webCS = new WebCS({width:X, height:Y});
+        // or let webCS = new WebCS({canvas:$("#canvas2GPU")[0]});
+        let cs_texture = webCS.createShader(glsl_texture, { local_size:[8, 8, 1], groups:[X/8, Y/8, 1], params:{'dst':'texture'}});
+
+        cs_texture.run(null);
+
+        let tex = cs_texture.getTexture('dst');
+        webCS.present(tex);
+        $("#display1")[0].appendChild(webCS.canvas);
+        `;
+        example_js.texture2 = `
+
+        cs_texture().run(null); // to gerenate a texture
+        var X = 512, Y = 512, Z = 1;
+        let webCS = new WebCS({width:X, height:Y});
+        // or let webCS = new WebCS({canvas:$("#canvas2GPU")[0]});
+        let cs_texture2 = webCS.createShader(glsl_texture2, { local_size:[8, 8, 1], groups:[X/8, Y/8, 1], params:{src:'texture', 'dst':'texture'}});
+
+        let texSrc = cs_texture.getTexture('dst');
+        cs_texture2.run(texSrc, null);
+
+        let tex = cs_texture2.getTexture('dst');
+        webCS.present(tex);
+        $("#display1")[0].appendChild(webCS.canvas);
+        `;
+        example_js.img_texture= `
+
+        var X = 512, Y = 512, Z = 1;
+        let webCS = new WebCS({width:X, height:Y});
+        // or let webCS = new WebCS({canvas:$("#canvas2GPU")[0]});
+        let cs_texture2 = webCS.createShader(glsl_texture2, { local_size:[8, 8, 1], groups:[X/8, Y/8, 1], params:{src:'texture', 'dst':'texture'}});
+
+        let texSrc = $('#image000')[0];
+        cs_texture2.run(texSrc, null);
+
+        let tex = cs_texture2.getTexture('dst');
+        webCS.present(tex);
+        $("#display1")[0].appendChild(webCS.canvas);
+        `;
+        //$("#code_sgemm_naive").hide();
+        let codes_block = $('#codes_block');
+        testcases.forEach(function(ele) {
+            let code_ele = $(`<code id='code_${ele}' class='code example language-javascript'></code>`)
+            let btf = hljs.highlight('c++', glsl_kernels[ele].toString());
+            let btf2 = hljs.highlight('javascript', example_js[ele]);
+            code_ele.html( btf.value + btf2.value.replace('glsl_'+ele, '<span class="hljs-title">glsl_'+ ele +'</span>'));
+            codes_block.append(code_ele);
+        });
+        $(".code.example").hide();
+        $("#code_sgemm_naive").show();
+    })();
+        
+
     })();
     </script>
 <script src='./js/webCS.html.js'></script>

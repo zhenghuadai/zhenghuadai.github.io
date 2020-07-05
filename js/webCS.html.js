@@ -1,4 +1,30 @@
 (function() {
+$('#image000').on('load', function() {
+    refresh();
+});
+$(function() {
+    let img = $('#image000');
+    if (!img[0].complete) return;
+    if ($('#image000').width() > 512) {
+        $('#display0').children().addClass('cssize');
+        refresh();
+    } else if ($('#image000').width() > 0) {
+        refresh();
+    }
+});
+
+function refresh() {
+    const canvas = $('#canvasimg0')[0];
+    const img = $('#image000');
+    let w = img.width();
+    let h = img.height();
+    canvas.width = img.width();
+    canvas.height = img.height();
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img[0], 0, 0, w, h);
+}
+
+
 // file menu
 (function() {
 $('#loadimg').click(function() {

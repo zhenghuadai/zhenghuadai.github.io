@@ -63,15 +63,16 @@ class CSKernel {
                 }
             } else if (arg instanceof WebGLTexture) {
                 this.vids[i] = arg;
-            } else if (arg instanceof HTMLCanvasElement) {
+            } else if ((arg instanceof HTMLCanvasElement) || (arg instanceof HTMLImageElement)) {
                 if (this.vids[i] == null) {
                     this.vids[i] = createTexture.apply(this);
                 }
                 let w = this.webCS.canvas.width;
                 let h = this.webCS.canvas.height;
-                glTexSubImage2D(
-                    GL_TEXTURE_2D, 0, 0, 0, w, h, gl.GL_RGBA,
-                    gl.GL_UNSIGNED_BYTE, arg);
+                gl.bindTexture(gl.TEXTURE_2D, this.vids[i]);
+                gl.texSubImage2D(
+                    gl.TEXTURE_2D, 0, 0, 0, w, h, gl.RGBA,
+                    gl.UNSIGNED_BYTE, arg);
             }
             gl.bindImageTexture(
                 i, this.vids[i], 0, false, 0, gl.READ_WRITE, gl.RGBA8);
