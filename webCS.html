@@ -243,7 +243,8 @@ text-overflow:ellipsis; overflow:hidden;
             }
 
             const t0 = performance.now();
-            cs_sgemm_naive.setUniform('MNK', M, N, K, 0).run(cpuA, cpuB, cpuC);
+            //cs_sgemm_naive.setUniform('MNK', M, N, K, 0).run(cpuA, cpuB, cpuC);
+            cs_sgemm_naive.run(cpuA, cpuB, cpuC, {'MNK':[M,N,K,0]});
             const t1 = performance.now();
             t = t1 - t0;
             $('#time').html(t.toFixed(1).toString());
@@ -272,6 +273,7 @@ text-overflow:ellipsis; overflow:hidden;
             let tex = cs_texture.getTexture('dst');
             webCS.present(tex);
             $("#display1")[0].appendChild(webCS.canvas);
+            $("#canvas2GPU").show();
         },
 
         do_texture2: function(){
@@ -286,6 +288,7 @@ text-overflow:ellipsis; overflow:hidden;
             let tex = cs_texture2.getTexture('dst');
             webCS.present(tex);
             $("#display1")[0].appendChild(webCS.canvas);
+            $("#canvas2GPU").show();
         },
 
         do_img_texture: function(){
@@ -299,11 +302,13 @@ text-overflow:ellipsis; overflow:hidden;
             let tex = cs_texture2.getTexture('dst');
             webCS.present(tex);
             $("#display1")[0].appendChild(webCS.canvas);
+            $("#canvas2GPU").show();
         }
 		};
         function doExampleGPU(e, ui) {
             let myfilter = ui.item.attr('data-filter');
             $(".code.example").hide();
+            $("#canvas2GPU").hide();
             $("#code_"+myfilter).show();
             do_cs["do_" + myfilter]();
         }
@@ -342,6 +347,8 @@ text-overflow:ellipsis; overflow:hidden;
         let webCS = new WebCS();
         let cs_sgemm = webCS.createShader(glsl_sgemm_naive, {local_size:[8, 8, 1], groups:[M/8, N/8, 1]});
         cs_sgemm.setUniform('MNK', M, N, K, 0).run(cpuA, cpuB, cpuC);
+        // or
+        // cs_sgemm_naive.run(cpuA, cpuB, cpuC, {'MNK':[M,N,K,0]});
         cs_sgemm.getData('C', cpuC);
             `;
         // clang-format on
