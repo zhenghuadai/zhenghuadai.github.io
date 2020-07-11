@@ -144,7 +144,7 @@ text-overflow:ellipsis; overflow:hidden;
             </xmp>
             <pre id='codes_block' class="prettyprint">
               <!--
-              <code id='code_sgemm_naive' class='code example language-javascript'></code>
+              <code id='code_smm_naive' class='code example language-javascript'></code>
               -->
             </pre>
         </div>
@@ -159,7 +159,7 @@ text-overflow:ellipsis; overflow:hidden;
     <script>
 
     let webCS = null;
-    let cs_sgemm_naive = null;
+    let cs_smm_naive = null;
     let cs_texture = null;
     let cs_texture2 = null;
     let cs_kernels = {};
@@ -168,10 +168,10 @@ text-overflow:ellipsis; overflow:hidden;
     var X = 512, Y = 512, Z = 1;
     (function(){
         let testcases = [
-                'sgemm_naive', 'texture', 'texture2', 'img_texture'
+                'smm_naive', 'texture', 'texture2', 'img_texture'
         ];
         // clang-format off
-        function glsl_sgemm_naive(A,B,C){
+        function glsl_smm_naive(A,B,C){
                 return `
                     // C[M, N] = A[M, K] * B[K, N]
                     uint M = this.uniform.MNK.x, N = this.uniform.MNK.y, K = this.uniform.MNK.z;
@@ -204,7 +204,7 @@ text-overflow:ellipsis; overflow:hidden;
                 `;
             }
         // clang-format on
-        glsl_kernels.sgemm_naive = glsl_sgemm_naive;
+        glsl_kernels.smm_naive = glsl_smm_naive;
         glsl_kernels.texture     = glsl_texture;
         glsl_kernels.texture2    = glsl_texture2;
         glsl_kernels.img_texture    = glsl_texture2;
@@ -226,7 +226,7 @@ text-overflow:ellipsis; overflow:hidden;
             doone(testcases, '#example_menus');
         })();
         var do_cs = {
-        do_sgemm_naive:function (){
+        do_smm_naive:function (){
             var M = 64, N = 64, K = 64;
             var createArray= function ( n) { 
                 var buf = new Float32Array(n);
@@ -238,27 +238,27 @@ text-overflow:ellipsis; overflow:hidden;
             let cpuA = createArray(M*K);
             let cpuB = createArray(K*N);
             let cpuC = createArray(M*N);
-            if(cs_sgemm_naive == null){
-                cs_sgemm_naive = webCS.createShader(glsl_sgemm_naive, { local_size:[8, 8, 1], groups:[M/8, N/8, 1]});
+            if(cs_smm_naive == null){
+                cs_smm_naive = webCS.createShader(glsl_smm_naive, { local_size:[8, 8, 1], groups:[M/8, N/8, 1]});
             }
 
             const t0 = performance.now();
-            //cs_sgemm_naive.setUniform('MNK', M, N, K, 0).run(cpuA, cpuB, cpuC);
-            cs_sgemm_naive.run(cpuA, cpuB, cpuC, {'MNK':[M,N,K,0]});
+            //cs_smm_naive.setUniform('MNK', M, N, K, 0).run(cpuA, cpuB, cpuC);
+            cs_smm_naive.run(cpuA, cpuB, cpuC, {'MNK':[M,N,K,0]});
             const t1 = performance.now();
             t = t1 - t0;
             $('#time').html(t.toFixed(1).toString());
             if(true){
                 let acc = 0, x = Math.floor(N*Math.random()),  y = Math.floor(N*Math.random());
                 for(let k=0; k<K; k++) acc += cpuA[y*K + k] * cpuB[k*N + x]
-                cs_sgemm_naive.getData('C', cpuC);
+                cs_smm_naive.getData('C', cpuC);
                 let result = cpuC[y*N+x];
                 let diff = result - acc;
                 result = result.toFixed(7);
                 diff = diff.toFixed(7);
                 App.showMessage(`Cgpu[${y},${x}] = ${result}; \u2003<br/> Cgpu[${y},${x}] - Ccpu[${y},${x}] : ${diff}`);
             }
-            $("#code_sgemm_naive").show();
+            $("#code_smm_naive").show();
 
         },
         do_texture:function(){
@@ -333,7 +333,7 @@ text-overflow:ellipsis; overflow:hidden;
     (function setupExample(){
         let example_js= {}
             // clang-format off
-        example_js.sgemm_naive = `
+        example_js.smm_naive = `
 
         let M = 64, N = 64, K =64;
         var createArray = function ( n) { 
@@ -345,11 +345,11 @@ text-overflow:ellipsis; overflow:hidden;
         let cpuB = createArray(K*N);
         let cpuC = createArray(M*N);
         let webCS = new WebCS();
-        let cs_sgemm = webCS.createShader(glsl_sgemm_naive, {local_size:[8, 8, 1], groups:[M/8, N/8, 1]});
-        cs_sgemm.setUniform('MNK', M, N, K, 0).run(cpuA, cpuB, cpuC);
+        let cs_smm = webCS.createShader(glsl_smm_naive, {local_size:[8, 8, 1], groups:[M/8, N/8, 1]});
+        cs_smm.setUniform('MNK', M, N, K, 0).run(cpuA, cpuB, cpuC);
         // or
-        // cs_sgemm_naive.run(cpuA, cpuB, cpuC, {'MNK':[M,N,K,0]});
-        cs_sgemm.getData('C', cpuC);
+        // cs_smm_naive.run(cpuA, cpuB, cpuC, {'MNK':[M,N,K,0]});
+        cs_smm.getData('C', cpuC);
             `;
         // clang-format on
         example_js.texture = `
@@ -394,7 +394,7 @@ text-overflow:ellipsis; overflow:hidden;
         webCS.present(tex);
         $("#display1")[0].appendChild(webCS.canvas);
         `;
-        //$("#code_sgemm_naive").hide();
+        //$("#code_smm_naive").hide();
         let codes_block = $('#codes_block');
         testcases.forEach(function(ele) {
             let code_ele = $(`<code id='code_${ele}' class='code example language-javascript'></code>`)
@@ -404,7 +404,7 @@ text-overflow:ellipsis; overflow:hidden;
             codes_block.append(code_ele);
         });
         $(".code.example").hide();
-        $("#code_sgemm_naive").show();
+        $("#code_smm_naive").show();
     })();
         
 

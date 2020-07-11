@@ -89,7 +89,7 @@ $('#messagebox')
         function() {
             setTimeout(function() {
                 $('#messagebox').addClass('minimize');
-            }, 2000);
+            }, 5000);
         });
 
 $('#meesagebox').button();

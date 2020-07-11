@@ -1,0 +1,463 @@
+<html>
+<head>
+<script src='./js/jquery-3.5.1.min.js'></script>
+<script src='./js/jquery-ui.min.js'></script>
+<script src='./js/webcs.js'></script>
+<script src='./js/highlight.min.js'></script>
+<link rel='stylesheet' href='./css/jquery-ui.min.css' />
+<link rel='stylesheet' href='./css/highlight.min.css' />
+<style>
+#menus{
+    postion: absolute;
+    top: 0;
+}
+.ui-menu { width: 150px; }
+.top-menu {
+    display:inline;
+    float:left;
+}
+.top-menu-right {
+    display:inline;
+    float:right;
+}
+#display0{
+    margin-top:40px;
+    display:block;
+    position:absolute;
+}
+#image000{
+    margin:0;
+}
+#reference{
+    background: white;
+    color:black;
+    padding:50px 200px 20px 20px;
+    postion: absolute;
+    bottom: 0;
+}
+#messagebox{
+    background: gray;
+    color:white;
+}
+.stdsize{
+    width:640px;
+    height:480px;
+    display:inline;
+}
+.cssize{
+    width:512px;
+    height:512px;
+    display:inline;
+}
+.fullsize{
+    width:100%;
+    height:100%;
+}
+#display1{
+    border-top: 60px solid white;
+    padding:20 80 20 0;
+    background: black;
+    color:white;
+    width:fit-content;
+}
+.code{
+    background: black;
+    color:white;
+}
+xmp.code{
+    margin:10 40 0 40;
+    background: white;
+    color:blue;
+}
+.minimize{
+width:10;
+height:10;
+text-overflow:ellipsis; overflow:hidden; 
+}
+</style>
+</head>
+<body>
+
+<div id='body'>
+    <div id='menus'>
+        <div class='top-menu' style='display:inline'>
+            <ul id='filemenu'>
+                <li> <div>file</div>
+                <ul>
+                    <li>
+                        <div id='loadimg'> Open </div>
+                        <input id='loadlocal' type='file' style='display:none'> </input>
+                    </li>
+
+                    <li class='ui-state-disabled'><div>Close</div></li>
+                </ul>
+                </li>
+            </ul>
+        </div>
+        <div class='top-menu' style='display:none'>
+            <ul id='viewmenu'>
+                <li> <div>view</div>
+                    <ul id='view_menus'>
+                    <li data-filter='full' cmd=0><div>full size</div></li>
+                    <li data-filter='640x480' cmd=1><div>640x480</div></li>
+                    <li data-filter='512x512' cmd=1><div>512x512</div></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+        <div class='top-menu'>
+            <ul id='examplemenu'>
+                <li> <div>example</div>
+                    <ul id='example_menus'>
+                        <!-- 
+                            <li data-filter='grayscale'><div>grayscale</div></li> 
+                        -->
+                    </ul>
+                </li>
+            </ul>
+        </div>
+        <div class='top-menu' style='margin-left:200'>
+            <div id='messageboxdiv'>
+            <label id="messagebox" class='ui-corner-all'></label>
+            </div>
+        </div>
+        <div class='top-menu-right' >
+            <div id='github'> <a href='https://github.com/zhenghuadai/webcs' target="_blank">
+<svg height="32" class="octicon octicon-mark-github text-white" viewBox="0 0 16 16" version="1.1" width="32" aria-hidden="true"><path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
+              </a>
+           </div>
+        </div>
+        <div class='top-menu-right' style='display:none'>
+            <label for="AddonToggleButton" title='Use last output as input'>Add On</label>
+            <input type="checkbox" id="AddonToggleButton" />
+        </div>
+        <div class='top-menu-right' >
+            <label for="GPUToggleButton">GPU</label>
+            <input type="checkbox" id="GPUToggleButton" checked/>
+        </div>
+        <div class='top-menu-right' >
+            <div id='timediv'> <label id="time">0</label> ms </div>
+        </div>
+        <!-- 
+        <div class='top-menu-right' >
+            <div id='TestGPU'> <label >Test</label> </div>
+        </div>
+        -->
+
+    </div>
+    <div id='thumb'>
+    </div>
+    <div id='display1' >
+        <div id='code_div'>
+            <xmp width="100%" class='code'>
+              <script src='http://zhenghuadai.github.io/js/webcs.js'></script>               
+            </xmp>
+            <pre id='codes_block' class="prettyprint">
+              <!--
+              <code id='code_sgemm_naive' class='code example language-javascript'></code>
+              -->
+            </pre>
+        </div>
+        <div id='canvas_div' style='display:none'>
+          <canvas id='canvas2GPU' class='canvas display1' title0='GPU Canvas' width=512 height=512></canvas>
+        </div>
+    </div>
+        <div id='reference'>
+            <ul>
+            REFERENCE
+            <li>
+            <a target="_blank" href='https://www.ibiblio.org/e-notes/webgl/gpu/mul/sgemm.htm'>Matrix multiplication in WebGL2-compute</a>
+            </li>
+            <li><a target="_blank" href='https://github.com/NervanaSystems/maxas/wiki/SGEMM'>A full walk through of the SGEMM implementation by Scott Gray</a></li>
+            </ul>
+
+        </div>
+    <div id='display0' style='display:none'>
+        <img id='image000' class='image display0 cssize' src='images/lenna.png' title0='Source Image' style='display:block'/>
+        <canvas id='canvasimg0' class='image display0' style='display:block'></canvas>
+    </div>
+    <script>
+
+    var X = 512, Y = X, Z = 1;
+    let App = {};
+    var do_cs = {};
+    let cs_kernels = {};
+    let glsl_kernels = {};
+    let testcases = [
+        'sgemm_naive', 'sgemmv1', 'sgemmv2'
+    ];
+    (function(){
+        let webCS = null;
+        let cpuA = null;
+        let cpuB = null;
+        let cpuC = null;
+        let cpuD = null;
+        let gpuA = null;
+        let gpuB = null;
+        let gpuC = null;
+        let gpuD = null;
+        function createGLSL() {
+        // clang-format off
+        function glsl_fill(A){
+                return `
+                    uint N = gl_WorkGroupSize.x * gl_NumWorkGroups.x;
+                    // Store the result
+                    A[thread.y*N + thread.x] = float(thread.y*N + thread.x) / float(thread.y*N + thread.x + N);
+                `;
+            }
+
+        function glsl_sgemm_naive(A,B,C,D){
+                return `
+                    // C[M, N] = A[M, K] * B[K, N]
+                    uint M = this.uniform.MNK.x, N = this.uniform.MNK.y, K = this.uniform.MNK.z;
+                    // Compute a single element C[thread.y, thread.x] by looping over k
+                    float sum = 0.0;
+                    for (uint k = 0u; k < K; k++)
+                    {
+                        sum += A[thread.y * K + k] * B[k * N + thread.x];
+                    }
+             
+                    // Store the result
+                    D[thread.y*N + thread.x] = C[thread.y*N + thread.x] + sum;
+                `;
+            }
+
+        function glsl_sgemmv1(A,B,C,D){
+                return `
+                    // C[M, N] = A[M, K] * B[K, N]
+                    uint M = this.uniform.MNK.x, N = this.uniform.MNK.y, K = this.uniform.MNK.z;
+                    shared float SA[LOCAL_SIZE_Y][LOCAL_SIZE_X];
+                    shared float SB[LOCAL_SIZE_X][LOCAL_SIZE_Y];
+                    float sum = 0.0;
+                    // Compute a single element C[thread.y, thread.x] by looping over tiles
+                    uint nTiles = K / LOCAL_SIZE_X;
+                    uint localx = gl_LocalInvocationID.x;
+                    uint localy = gl_LocalInvocationID.y;
+                    for (uint i = 0u; i < nTiles; i++){
+                        SA[localy][localx] = A[thread.y*K + i*LOCAL_SIZE_X + localx];
+                        SB[localy][localx] = B[(localy + i*LOCAL_SIZE_Y) * N + thread.x];
+                        memoryBarrierShared();
+                        barrier();
+
+                        for (uint k = 0u; k < LOCAL_SIZE_X; k++)
+                        {
+                            sum += SA[localy][k] * SB[k][localx];
+                        }
+                        barrier();
+                    }
+             
+                    // Store the result
+                    D[thread.y*N + thread.x] = C[thread.y*N + thread.x] + sum;
+                `;
+            }
+        function glsl_sgemmv2(A,B,C,D){
+                const batchX = 64;
+                return `
+                    shared float SB[LOCAL_SIZE_Y][${batchX}u*LOCAL_SIZE_X];
+                    // C[M, N] = A[M, K] * B[K, N]
+                    uint M = this.uniform.MNK.x, N = this.uniform.MNK.y, K = this.uniform.MNK.z;
+                    const uint BATCHN = ${batchX}u;
+                    const uint TS = LOCAL_SIZE_Y;
+                    float sum[BATCHN];
+                    float RA[BATCHN];
+                    // Compute a single element C[thread.y, thread.x] by looping over tiles
+                    uint nTiles = K / (BATCHN*LOCAL_SIZE_X);
+                    uint localBX = gl_LocalInvocationID.x;
+                    uint localx = gl_LocalInvocationID.x;
+                    uint localy = gl_LocalInvocationID.y;
+                    for (uint i = 0u; i < nTiles; i++){
+                        for(uint bi = 0u; bi < BATCHN; bi++){
+                            SB[localy][localx*BATCHN +bi] = B[(localy + i*LOCAL_SIZE_Y) * N + thread.x*BATCHN + bi];
+                        }
+                        for(uint ti = 0u; ti < TS; ti++){
+                            RA[ti] = A[thread.y*K + i*TS + ti];
+                        }
+                        memoryBarrierShared();
+                        barrier();
+
+                        for(uint bi = 0u; bi < BATCHN; bi++){
+                            for (uint k = 0u; k < TS; k++)
+                            {
+                                sum[bi] += RA[k] * SB[k][bi];
+                            }
+                        }
+                        barrier();
+                    }
+             
+                    // Store the result
+                    for(uint bi = 0u; bi < BATCHN; bi++){
+                        D[thread.y*N + thread.x*BATCHN + bi] = C[thread.y*N + thread.x*BATCHN + bi] + sum[bi];
+                    }
+                `;
+            }
+
+            // clang-format on
+            glsl_kernels.sgemm_naive = glsl_sgemm_naive;
+            glsl_kernels.sgemmv1 = glsl_sgemmv1;
+            glsl_kernels.sgemmv2 = glsl_sgemmv2;
+            glsl_kernels.fill = glsl_fill;
+        }
+        function createCS(){
+       
+        do_cs.do_sgemm_general = function (kernel_name){
+            var M = X, N = Y, K = X;
+            let dimentions = {"sgemmv2":{ local_size:[1, 64, 1], groups:[M/64, N/64, 1]}};
+            // create buffer on gpu
+            initGpuBuffer();
+            // create the gpu kernel 
+            if(cs_kernels[kernel_name] == null){
+                let thesource = glsl_kernels[kernel_name] || glsl_sgemm_naive;
+                let thedimention = dimentions[kernel_name] || { local_size:[8, 8, 1], groups:[M/8, N/8, 1]}
+                cs_kernels[kernel_name] = webCS.createShader(thesource, thedimention);
+            }
+            let the_sgemm_kernel = cs_kernels[kernel_name];
+
+            // dispatch the gpu kernel
+            let t = getTime( ()=>{
+               // the parameter can be js typed array. 
+               // the_sgemm_kernel.setUniform('MNK', M, N, K, 0).run(cpuA, cpuB, cpuC, null);
+               // pass the gpu buffer as parameter
+               the_sgemm_kernel.run(gpuA, gpuB, gpuC, gpuD, {'MNK':[M,N,K,0]});
+            });
+            // verify the result
+            if(true){
+                let x = Math.floor(N*Math.random()),  y = Math.floor(N*Math.random());
+                let acc = cpuC[y*N+x];
+                for(let k=0; k<K; k++) acc += cpuA[y*K + k] * cpuB[k*N + x]
+                the_sgemm_kernel.getData('D', cpuD);
+                let result = cpuD[y*N+x];
+                let diff = result - acc;
+                result = result.toFixed(7);
+                diff = diff.toFixed(7);
+                App.showMessage(`Dgpu[${y},${x}] = ${result}; \u2003<br/> Dgpu[${y},${x}] - Dcpu[${y},${x}] : ${diff}`);
+            }
+            function initGpuBuffer(){
+                if(gpuA == null){
+                    gpuA = gpuA || webCS.createBuffer(M*K*4);
+                    gpuB = gpuB || webCS.createBuffer(K*K*4);
+                    gpuC = gpuC || webCS.createBuffer(M*N*4);
+                    gpuD = gpuD || webCS.createBuffer(M*N*4);
+                    do_cs.fill(gpuA);
+                    do_cs.fill(gpuB);
+                    do_cs.fill(gpuC);
+                    do_cs.fill(gpuD);
+                    cpuA = webCS.getData(gpuA, 'float');
+                    cpuB = webCS.getData(gpuB, 'float');
+                    cpuC = webCS.getData(gpuC, 'float');
+                    cpuD = webCS.getData(gpuD, 'float');
+                }
+            }
+
+            function getTime(f){
+                const t0 = performance.now();
+                {
+                    f();
+                }
+                const t1 = performance.now();
+                let t = t1 - t0;
+                $('#time').html(t.toFixed(4).toString());
+                return t;
+            }
+
+
+        };
+        do_cs.do_sgemm_naive = do_cs.do_sgemm_general;
+        do_cs.do_sgemmv1 = do_cs.do_sgemm_general;
+        do_cs.do_sgemmv2 = do_cs.do_sgemm_general;
+    }
+     
+    // append menus
+    function appendmenu() {
+        function doone(thefilters, themenu) {
+            let ula = $('<ul/>');
+            thefilters.forEach(function(ele) {
+                ula.append(
+                    '<li data-filter=\'' + ele + '\'><div>' + ele +
+                    '</div></li>');
+            });
+            $(themenu).append(ula.children().detach());
+        }
+        doone(testcases, '#example_menus');
+        function doExampleGPU(e, ui) {
+            let myfilter = ui.item.attr('data-filter');
+            $(".code.example").hide();
+            $("#canvas2GPU").hide();
+            $("#code_"+myfilter).show();
+            do_cs["do_" + myfilter](myfilter);
+        }
+        function doExample(e, ui) {
+            let myfilter = ui.item.attr('data-filter');
+            if(webCS == null){
+                webCS = new WebCS({canvas:$("#canvas2GPU")[0]});
+                //webCS = new WebCS();
+            }
+            if(myfilter == null){
+                return;
+            }
+            if ($('#GPUToggleButton').is(':checked')) {
+                doExampleGPU(e, ui);
+            } else {
+            }
+        }
+        $('#examplemenu').menu({select: doExample});
+
+
+    };
+   
+    function setupExample(){
+        //$("#code_sgemm_naive").hide();
+        let codes_block = $('#codes_block');
+        testcases.forEach(function(ele) {
+            let code_ele = $(`<code id='code_${ele}' class='code example language-javascript'></code>`)
+            let btf = hljs.highlight('c++', glsl_kernels[ele].toString());
+            let btf2 = hljs.highlight('javascript', do_cs['do_'+ele].toString());
+            code_ele.html( btf.value + '<br/><br/>        '+ btf2.value.replace('glsl_'+ele, '<span class="hljs-title">glsl_'+ ele +'</span>'));
+            codes_block.append(code_ele);
+        });
+        $(".code.example").hide();
+        $("#code_sgemm_naive").show();
+    };
+        
+    function InitApp(){
+        var M = X, N = Y, K = X;
+        var createArray= function ( n) { 
+            return new Float32Array(Array.from({length:n}, ()=>Math.random()));
+        };
+        //cpuA = cpuA || createArray(M*K);
+        //cpuB = cpuB || createArray(K*N);
+        //cpuC = cpuC || createArray(M*N);
+        //cpuD = cpuD || createArray(M*N);
+        webCS = webCS || new WebCS({canvas:$("#canvas2GPU")[0]});
+
+        do_cs.fill = function(gpuBuffer){
+            if(cs_kernels['fill'] == null){
+                let thesource =  glsl_kernels.fill;
+                cs_kernels['fill'] = webCS.createShader(thesource, { local_size:[8, 8, 1], groups:[M/8, N/8, 1]});
+            }
+            cs_kernels['fill'].run(gpuBuffer);
+        }
+        gpuA = gpuA || webCS.createBuffer(M*K*4);
+        gpuB = gpuB || webCS.createBuffer(K*K*4);
+        gpuC = gpuC || webCS.createBuffer(M*N*4);
+        gpuD = gpuD || webCS.createBuffer(M*N*4);
+        do_cs.fill(gpuA);
+        do_cs.fill(gpuB);
+        do_cs.fill(gpuC);
+        do_cs.fill(gpuD);
+        cpuA = webCS.getData(gpuA, 'float');
+        cpuB = webCS.getData(gpuB, 'float');
+        cpuC = webCS.getData(gpuC, 'float');
+        cpuD = webCS.getData(gpuD, 'float');
+    };
+
+    createGLSL();
+    createCS();
+    InitApp();
+    appendmenu();
+    setupExample();
+    })();
+    </script>
+<script src='./js/webCS.html.js'></script>
+</div>
+</body>
+</html>
