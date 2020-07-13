@@ -59,7 +59,7 @@ $(function app() {
         (function appendmenu() {
             let filters = [
                 'grayscale', 'invert', 'red', 'green', 'blue', 'mirror', 'flip',
-                'sepia', 'saturation', 'thresholding'
+                'sepia', 'saturation', 'thresholding', 'dct', 'idct'
             ];
             let edges = [
                 'canny', 'gaussian', 'bigGaussian', 'highpass', 'lowpass3',
@@ -78,22 +78,31 @@ $(function app() {
             doone(filters, '#filter_menus');
             doone(edges, '#edge_menus');
         })();
+        let last_dct_tex = null;
         function dofilterGPU(e, ui) {
             let t = 0;
             let myfilter = ui.item.attr('data-filter');
             if (myfilter) {
                 let canvas = $('#canvasGPU')[0];
+                //let img = $('#image000')[0];
+                let img = $('#canvasimg0')[0];
+                let src = img;
                 if ($('#AddonToggleButton').is(':checked') && (canavasedGPU)) {
-                    const t0 = performance.now();
-                    let c = lenaGPU[myfilter](canvas, canvas).canvas;
-                    const t1 = performance.now();
-                    t = t1 - t0;
-                } else {
-                    let img = $('#image000')[0];
-                    img = $('#canvasimg0')[0];
+                    src = canvas;
+                } 
+                if(myfilter == 'idct'){
+                    src = last_dct_tex;
+                }
+                {
                     let c;
                     const t0 = performance.now();
-                    c = lenaGPU[myfilter](img, canvas).canvas || null;
+                    c = lenaGPU[myfilter](src, canvas);
+                    if( myfilter == 'dct' || myfilter == 'idct'){
+                        last_dct_tex = c;
+                        c = lenaGPU.present(c, canvas).canvas;
+                    }else{
+                        c = c.canvas;
+                    }
                     if (c) {
                         if (canavasedGPU == 0) {
                             $(c).addClass('gpu');
@@ -216,7 +225,7 @@ $(function app() {
             }
             return matrices
         };
-        const gpu = new GPU();
+        const gpu = new (GPUJS || GPU)();
         const multiplyMatrix =
             gpu.createKernel(function(a, b) {
                    let sum = 0;
