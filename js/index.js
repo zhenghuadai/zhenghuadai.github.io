@@ -64,7 +64,7 @@ $(function app() {
             let edges = [
                 'canny', 'gaussian', 'bigGaussian', 'highpass', 'lowpass3',
                 'laplacian', 'lowpass5', 'prewittVertical', 'prewittHorizontal',
-                'roberts', 'sharpen', 'sobelVertical', 'sobelHorizontal'
+                'roberts', 'sharpen', 'sobelVertical', 'sobelHorizontal', 'sobelXY'
             ];
             function doone(thefilters, themenu) {
                 let ula = $('<ul/>');

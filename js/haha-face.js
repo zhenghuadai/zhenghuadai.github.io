@@ -74,7 +74,7 @@ class HahaFace {
                 srcCanvas, null, X / 8, Y / 8, 1,
                 {'anchor0': anchor0, 'anchor1': anchor1});
             let tex = this.shaders.bigmouse.getTexture('dst');
-            webCS.present(tex);
+            this.webCS.present(tex);
         }
     };
 

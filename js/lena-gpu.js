@@ -284,7 +284,10 @@ var operators = {
                                  -1/4, -2/4, -1/4 ],
             sobelVertical     : [1/4, 0, -1/4,
                                  2/4, 0, -2/4,
-                                 1/4, 0, -1/4 ]
+                                 1/4, 0, -1/4 ],
+            sobelXY3          : [1/3, 1/3, 0,
+                                 1/3, 0  , -1/3,
+                                 0  ,-1/3, -1/3]
     // clang-format on
 };
 class LenaGPU {
@@ -507,6 +510,24 @@ class LenaGPU {
         let imgidct = this.cskernels.idctrow(colidct, idct_coeffient);
 
         return imgidct;
+    }
+
+    sobelXY(image, dstCanvas, ...rest){
+        let sobelX = this.sobelHorizontal(image,dstCanvas).getPixels();
+        let sobelY = this.sobelVertical  (image,dstCanvas).getPixels();
+        let n = sobelX.length;
+        let data = new Uint8ClampedArray(n);
+        for (let i = 0; i < n; i ++){
+            data[i] = sobelX[i] + sobelY[i];
+        }
+        
+        var ctx = dstCanvas.getContext('2d');
+        let w = image.width;
+        let h = image.height;
+        dstCanvas.width = w;
+        dstCanvas.height = h;
+        ctx.putImageData(new ImageData(data, w, h), 0, 0);
+        return data;
     }
 };
 
