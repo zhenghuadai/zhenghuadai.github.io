@@ -182,7 +182,7 @@ class CSKernel {
             this.groups[1] = args[nargs + 1];
             this.groups[2] = args[nargs + 2];
         }
-        if (args.length == nargs + 1) {
+        if ((args.length == nargs + 1) || (args.length == nargs + 4)) {
             // last param is {'uniform_var':[]}
             let uniforms = args[args.length - 1];
             for (var uniform_key in uniforms) {
