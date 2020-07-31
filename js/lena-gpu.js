@@ -60,7 +60,6 @@ var gfunc = {
         } else {
             r = g = b = 0;
         }
-        // this.color(r, g, b, 1.0);
         return exports(r, g, b, 1.0);
     },
     thresholding2: function(image, tlow, thigh) {
@@ -72,7 +71,6 @@ var gfunc = {
         } else {
             r = g = b = 0;
         }
-        // this.color(r, g, b, 1.0);
         return exports(r, g, b, 1.0);
     },
 
@@ -81,12 +79,10 @@ var gfunc = {
         var r = 1.0 - pixel[0];
         var g = 1.0 - pixel[1];
         var b = 1.0 - pixel[2];
-        // this.color(r, g, b, 1.0);
         return exports(r, g, b, 1.0);
     },
     red: function(image, w, h) {
         var pixel = image[this.thread.y][this.thread.x];
-        // this.color(pixel[0], 0, 0, 1.0);
         return exports(pixel[0], 0, 0, 1.0);
     },
     green: function(image, w, h) {
@@ -134,6 +130,55 @@ var gfunc = {
         var pixel = image[this.thread.y][this.thread.x];
         return exports(pixel[0], pixel[1], pixel[2], 1.0);
     },
+    bin01: function(image, minv, w, h) {
+        var pixel = image[this.thread.y][this.thread.x];
+        var r = 0, g = 0, b = 0;
+        if (pixel[0] < minv && pixel[1] < minv && pixel[2] < minv) {
+            r = g = b = 0;
+        } else {
+            r = g = b = 1.0;
+        }
+        return exports(r, g, b, 1.0);
+    },
+
+    /*********  op2   ***************/
+    diff: function(image0, image1, w, h) {
+        var pixel0 = image0[this.thread.y][this.thread.x];
+        var pixel1 = image1[this.thread.y][this.thread.x];
+        // clang-format off
+        var pixel = [
+            Math.abs(pixel0[0] - pixel1[0]), Math.abs(pixel0[1] - pixel1[1]), 
+            Math.abs(pixel0[2] - pixel1[2]), 1.0
+        ];
+        // clang-format on
+        return exports(pixel[0], pixel[1], pixel[2], 1.0);
+    },
+    add: function(image0, image1, w, h) {
+        var pixel0 = image0[this.thread.y][this.thread.x];
+        var pixel1 = image1[this.thread.y][this.thread.x];
+        // clang-format off
+        var pixel = [
+            pixel0[0] + pixel1[0], pixel0[1] + pixel1[1], 
+            pixel0[2] + pixel1[2], 1.0
+        ];
+        // clang-format on
+        for (var i =0; i< 3; i++){
+            pixel[i] =  pixel[i] / 1.0;
+        }
+        return exports(pixel[0], pixel[1], pixel[2], 1.0);
+    },
+    mul: function(image, fact, w, h) {
+        var pixel0 = image[this.thread.y][this.thread.x];
+        var pixel = pixel0 * fact;
+        // clang-format off
+        var pixel = [
+            pixel0[0] * fact, pixel0[1] * fact, 
+            pixel0[2] * fact, 1.0
+        ];
+        // clang-format on
+        return exports(pixel[0], pixel[1], pixel[2], 1.0);
+    },
+
 };
 
 cfunc = {
@@ -153,16 +198,21 @@ cfunc = {
         const pixel22 = canvas[y - 1 + 2][x - 1 + 2];
         var dx = 0;
         var dy = 0;
+        var xy = 0;
         // clang-format off
             dy = dot3(pixel00[0], pixel01[0], pixel02[0],  1.0/4,  2.0/4,  1.0/4)
                + dot3(pixel20[0], pixel21[0], pixel22[0], -1.0/4, -2.0/4, -1.0/4);
             dx = dot3(pixel00[0], pixel10[0], pixel20[0],  1.0/4,  2.0/4,  1.0/4)
                + dot3(pixel02[0], pixel12[0], pixel22[0], -1.0/4, -2.0/4, -1.0/4);
+            xy = dot3(pixel00[0], pixel01[0], pixel02[0], 1.0, 1.0, 1.0)
+               + dot3(pixel10[0], pixel11[0], pixel12[0], 1.0, 1.0, 1.0)
+               + dot3(pixel20[0], pixel21[0], pixel22[0], 1.0, 1.0, 1.0);
         // clang-format on
 
         var grad = 0;
         var dir = 0;
         grad = Math.sqrt(dx * dx + dy * dy);
+        // grad = grad / (xy/9.0 + 1.0 / 255.0);
         dir = Math.atan2(dy, dx);
         /*
         if ((dir >= -Math.PI / 8 && dir < Math.PI / 8) ||
@@ -182,28 +232,58 @@ cfunc = {
             dir = -Math.PI / 4;
         }
         */
-        return exports(grad, dir, 0, 1.0);
+        return exports(grad, dir, 0.0, 1.0);
         // this.color(dx, dx, dx, 1.0);
     },
-    nonMaximumSuppression: function(image, grads) {
+    nonMaximumSuppression: function(image, grads, minGrad) {
         var x = this.thread.x, y = this.thread.y;
-        var fw = 5, fh = 5;
         var pixel00 = image[y][x];
-        var r = pixel00[0];
-        for (var i = 0; i < fh; i++) {
-            for (var j = 0; j < fw; j++) {
-                const pix = image[y - 2 + i][x - 2 + j];
-                const grad = grads[y - 2 + i][x - 2 + i];
-                const r0 = pix[0];
-                const dir = grad[1];
-                var angle = Math.atan2(i - 2, j - 2);
-                const r1 = r0 * Math.abs(Math.cos(dir - angle));
-                if (r1 > r) {
-                    r = 0;
+        var grad = grads[y][x];
+        var r = 1.0;
+        if (0 == 0) {
+            var x0 = 0;
+            var y0 = 0;
+            var x1 = 0;
+            var y1 = 0;
+            var b = 0.0;
+            var dir = grad[1] * 180 / Math.PI;
+            var dir1 = Math.abs(dir);
+            // clang-format off
+            if (dir1 <= 45) {
+                y0 = 0; x0 = 1; y1 = -1; x1 = 1;
+            } else if (dir1 <= 90) {
+                y0 = -1; x0 = 1; y1 = -1; x1 = 0;
+            } else if (dir1 <= 135) {
+                y0 = -1; x0 = 0; y1 = -1; x1 = -1;
+            } else {
+                y0 = -1; x0 = -1; y1 = 0; x1 = -1;
+            }
+            if (dir >= 0) {
+            } else {
+                y0 = -y0; y1 = -y1;
+            }
+            // clang-format on
+            b = (Math.abs(dir) - Math.floor(Math.abs(dir) / 45.0) * 45.0) /
+                45.0;
+            for (var iii = -2; iii < 2; iii++) {
+                if (iii != 0) {
+                    const grad0 = grads[y + iii * y0][x - iii * x0];
+                    const grad1 = grads[y + iii * y1][x - iii * x1];
+                    const r0 = grad0[0];
+                    const r1 = grad1[0];
+                    const r01 = r0 * (1.0 - b) + r1 * b;
+                    if (r01 > grad[0]) {
+                        r = 0
+                    }
                 }
             }
         }
-        return exports(r * 2, r * 2, r * 2, 1.0);
+
+        if (grad[0] < minGrad) {
+            r = 0
+        }
+
+        return exports(pixel00[0] * r, pixel00[1] * r, pixel00[2] * r, 1.0);
     },
     dctrow: function(image, coe) {
         var x = this.thread.x, y = this.thread.y;
@@ -235,7 +315,7 @@ cfunc = {
             g += pixel[1] * coe[u][i];
             b += pixel[2] * coe[u][i];
         }
-        
+
         return exports(r, g, b, 1.0);
     }
 };
@@ -285,9 +365,18 @@ var operators = {
             sobelVertical     : [1/4, 0, -1/4,
                                  2/4, 0, -2/4,
                                  1/4, 0, -1/4 ],
-            sobelXY3          : [1/3, 1/3, 0,
+            sobelXY3a         : [1/3, 1/3, 0,
                                  1/3, 0  , -1/3,
-                                 0  ,-1/3, -1/3]
+                                 0  ,-1/3, -1/3],
+            sobelXY3b         : [0/3, 1/3, 1/3,
+                                -1/3, 0/3, 1/3,
+                                -1/3,-1/3, 0/3],
+            sobelHorizontal2  : [1/4, 2/4, 1/4,
+                                 -2/4,-4/4,-2/4 ,
+                                 1/4, 2/4, 1/4 ],
+            sobelVertical2    : [1/4, -2/4, 1/4,
+                                 2/4, -4/4, 2/4,
+                                 1/4, -2/4, 1/4 ],
     // clang-format on
 };
 class LenaGPU {
@@ -421,15 +510,16 @@ class LenaGPU {
         return mykernel;
     }
     present(mykernel, dstCanvas, w, h) {
-        if(mykernel.texture && mykernel.texture instanceof WebGLTexture)
-        {
+        if (mykernel.texture && mykernel.texture instanceof WebGLTexture) {
             w = w || mykernel.dimensions[0] || this.gpu.canvas.width;
             h = h || mykernel.dimensions[1] || this.gpu.canvas.height;
             this.gfxkernels.passthrough(mykernel, w, h);
-            return this.present(this.gfxkernels.passthrough, dstCanvas,w,h);
+            return this.present(this.gfxkernels.passthrough, dstCanvas, w, h);
         }
         if (dstCanvas && (dstCanvas != mykernel.canvas)) {
             var ctx = dstCanvas.getContext('2d');
+            w = w || dstCanvas.width;
+            h = h || dstCanvas.height;
             dstCanvas.width = w;
             dstCanvas.height = h;
             ctx.putImageData(new ImageData(mykernel.getPixels(), w, h), 0, 0);
@@ -462,9 +552,8 @@ class LenaGPU {
         var texGray = this.cskernels.gray(image, w, h);
         var texGuass0 = this.cskernels.conv5x5(texGray, operators.bigGaussian);
         var grad = this.cskernels.gradient(texGuass0);
-        var texlap = this.cskernels.conv3x3(texGuass0, operators.laplacian);
-        var texnms = this.cskernels.nonMaximumSuppression(texlap, grad);
-        var edgs = this.cskernels.thresholding2(texnms, 0.02, 0.6130);
+        var texnms = this.cskernels.nonMaximumSuppression(texGray, grad, 0.03);
+        var edgs = this.cskernels.thresholding2(texnms, 0.01, 1.0);
         this.gfxkernels.passthrough(edgs, w, h);
         this.present(this.gfxkernels.passthrough, dstCanvas, w, h);
 
@@ -482,12 +571,12 @@ class LenaGPU {
           [0.19134171618254492, -0.4619397662556434, 0.46193976625564326, -0.19134171618254495, -0.19134171618254528, 0.4619397662556437, -0.46193976625564354, 0.19134171618254314],
           [0.09754516100806417, -0.2777851165098011, 0.4157348061512728, -0.4903926402016153, 0.4903926402016152, -0.415734806151272, 0.2777851165098022, -0.09754516100806254]
         ];
-        
+
         // clang-format on
         let w = image.width || this.width;
         let h = image.height || this.height;
-        let rowdct = this.cskernels.dctrow(image,    dct_coeffient);
-        let imgdct = this.cskernels.dctcol(rowdct,   dct_coeffient);
+        let rowdct = this.cskernels.dctrow(image, dct_coeffient);
+        let imgdct = this.cskernels.dctcol(rowdct, dct_coeffient);
         return imgdct;
     }
 
@@ -506,28 +595,27 @@ class LenaGPU {
         // clang-format on
         let w = image.width || this.width;
         let h = image.height || this.height;
-        let colidct = this.cskernels.idctcol(image,  idct_coeffient);
+        let colidct = this.cskernels.idctcol(image, idct_coeffient);
         let imgidct = this.cskernels.idctrow(colidct, idct_coeffient);
 
         return imgidct;
     }
 
-    sobelXY(image, dstCanvas, ...rest){
-        let sobelX = this.sobelHorizontal(image,dstCanvas).getPixels();
-        let sobelY = this.sobelVertical  (image,dstCanvas).getPixels();
-        let n = sobelX.length;
-        let data = new Uint8ClampedArray(n);
-        for (let i = 0; i < n; i ++){
-            data[i] = sobelX[i] + sobelY[i];
-        }
-        
-        var ctx = dstCanvas.getContext('2d');
-        let w = image.width;
-        let h = image.height;
-        dstCanvas.width = w;
-        dstCanvas.height = h;
-        ctx.putImageData(new ImageData(data, w, h), 0, 0);
-        return data;
+    sobelXY(image, dstCanvas, ...rest) {
+        this.cskernels.conv3x3.setImmutable(true);
+        this.cskernels.add.setImmutable(true);
+        let sobelX = this.cskernels.conv3x3(image, operators.sobelHorizontal);
+        let sobelY = this.cskernels.conv3x3(image, operators.sobelVertical);
+        let sobelXY3a = this.cskernels.conv3x3(image, operators.sobelXY3a);
+        let sobelXY3b = this.cskernels.conv3x3(image, operators.sobelXY3b);
+        let xy = this.cskernels.add(sobelX, sobelY, 0, 0);
+        let xy3 = this.cskernels.add(xy, sobelXY3a, 0, 0);
+        let xy4 = this.cskernels.add(xy3, sobelXY3b, 0, 0);
+        //var texGray = this.cskernels.gray(xy4, 0, 0);
+        //var edgs = this.cskernels.bin01(texGray, 0.06, 0, 0);
+        this.cskernels.conv3x3.setImmutable(false);
+        this.cskernels.add.setImmutable(false);
+        return this.present(xy4, dstCanvas, image.width, image.height);
     }
 };
 
