@@ -214,6 +214,8 @@ text-overflow:ellipsis; overflow:hidden;
             }
         function glsl_img_dwt(src, dst){
                 return `
+                function int YSize(){ return int(gl_NumWorkGroups.y*LOCAL_SIZE_Y);}
+                function int XSize(){ return int(gl_NumWorkGroups.x*LOCAL_SIZE_X);} 
                 int x = int(thread.x);
                 int y = int(thread.y);
                 vec4 p00 = src[2*y + 0][2*x + 0];
@@ -221,9 +223,9 @@ text-overflow:ellipsis; overflow:hidden;
                 vec4 p10 = src[2*y + 1][2*x + 0];
                 vec4 p11 = src[2*y + 1][2*x + 1];
                 dst[y][x] = (p00 + p01 + p10 + p11) / 4.0;
-                dst[y][x + int(gl_NumWorkGroups.x*LOCAL_SIZE_X)] = (p00 + p10 - p01 - p11) / 4.0;
-                dst[y + int(gl_NumWorkGroups.y*LOCAL_SIZE_Y)][x] = (p00 + p01 - p10 - p11) / 4.0;
-                dst[y + int(gl_NumWorkGroups.y*LOCAL_SIZE_Y)][x + int(gl_NumWorkGroups.x*LOCAL_SIZE_X)] = (p00 + p11 - p01 - p10) / 4.0;
+                dst[y][x + XSize()] = (p00 + p10 - p01 - p11) / 4.0;
+                dst[y + YSize()][x] = (p00 + p01 - p10 - p11) / 4.0;
+                dst[y + YSize()][x + XSize()] = (p00 + p11 - p01 - p10) / 4.0;
                 `;
             }
         // clang-format on
