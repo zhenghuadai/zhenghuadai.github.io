@@ -62,7 +62,7 @@ $(function app() {
                 'sepia', 'saturation', 'thresholding', 'dct', 'idct'
             ];
             let edges = [
-                'canny', 'gaussian', 'bigGaussian', 'highpass', 'lowpass3',
+                'canny', 'gaussian', 'gaussian2', 'gaussian3', 'bigGaussian', 'highpass', 'lowpass3',
                 'laplacian', 'lowpass5', 'prewittVertical', 'prewittHorizontal',
                 'roberts', 'sharpen', 'sobelVertical', 'sobelHorizontal', 'sobelXY',
                 'sobelVertical2', 'sobelHorizontal2',

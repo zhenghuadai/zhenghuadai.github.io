@@ -66,9 +66,12 @@ var gfunc = {
         var pixel = image[this.thread.y][this.thread.x];
         var r = pixel[0], g = pixel[1], b = pixel[2], a = pixel[3];
         var w = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-        if ((w > tlow) && (w < thigh)) {
+        if ((w > tlow) && (w <= thigh)) {
+            r = 1.0;
+            g = b = 0.0;
+        } else if(w > thigh){
             r = g = b = 1.0;
-        } else {
+        } else{
             r = g = b = 0;
         }
         return exports(r, g, b, 1.0);
@@ -162,8 +165,8 @@ var gfunc = {
             pixel0[2] + pixel1[2], 1.0
         ];
         // clang-format on
-        for (var i =0; i< 3; i++){
-            pixel[i] =  pixel[i] / 1.0;
+        for (var i = 0; i < 3; i++) {
+            pixel[i] = pixel[i] / 1.0;
         }
         return exports(pixel[0], pixel[1], pixel[2], 1.0);
     },
@@ -183,9 +186,9 @@ var gfunc = {
 
 cfunc = {
     gradient: function(canvas) {
-        function dot3(a0, a1, a2, b0, b1, b2) {
-            return a0 * b0 + a1 * b1 + a2 * b2;
-        }
+        //function dot3(a0, a1, a2, b0, b1, b2) {
+        //    return a0 * b0 + a1 * b1 + a2 * b2;
+        //}
         var x = this.thread.x, y = this.thread.y;
         const pixel00 = canvas[y - 1 + 0][x - 1 + 0];
         const pixel01 = canvas[y - 1 + 0][x - 1 + 1];
@@ -328,6 +331,12 @@ var operators = {
             gaussian          : [1/16, 2/16, 1/16,
                                  2/16, 4/16, 2/16,
                                  1/16, 2/16, 1/16],
+	        gaussian2         : [0.10186806441981629, 0.11543163961422664, 0.10186806441981629,
+                                 0.11543163961422664, 0.1308011838638283, 0.11543163961422664,
+                                 0.10186806441981629, 0.11543163961422664, 0.10186806441981629],
+            gaussian3         : [0.1069973020509637, 0.11310981661256507, 0.1069973020509637,
+                                 0.11310981661256507, 0.11957152534588486, 0.11310981661256507,
+                                 0.1069973020509637, 0.11310981661256507, 0.1069973020509637],
             bigGaussian       : [2/159, 4/159, 5/159, 4/159, 2/159,
                                  4/159, 9/159,12/159, 9/159, 4/159,
                                  5/159,12/159,15/159,12/159, 5/159,
@@ -388,6 +397,9 @@ class LenaGPU {
         this.gpu = settings.gpu || new theGPU();
         LenaGPU.gpu = LenaGPU.gpu || this.gpu;
         this.dynamicOutput = (this.width && this.height) ? false : true;
+        this.gpu.addFunction(function dot3(a0, a1, a2, b0, b1, b2) {
+            return a0 * b0 + a1 * b1 + a2 * b2;
+        });
         let s3x3 = {
             constants: {fw: 3, fh: 3, fw2: 1, fh2: 1},
             dynamicOutput: this.dynamicOutput,
@@ -553,7 +565,7 @@ class LenaGPU {
         var texGuass0 = this.cskernels.conv5x5(texGray, operators.bigGaussian);
         var grad = this.cskernels.gradient(texGuass0);
         var texnms = this.cskernels.nonMaximumSuppression(texGray, grad, 0.03);
-        var edgs = this.cskernels.thresholding2(texnms, 0.01, 1.0);
+        var edgs = this.cskernels.thresholding2(texnms, 0.02, 0.4);
         this.gfxkernels.passthrough(edgs, w, h);
         this.present(this.gfxkernels.passthrough, dstCanvas, w, h);
 
@@ -611,8 +623,8 @@ class LenaGPU {
         let xy = this.cskernels.add(sobelX, sobelY, 0, 0);
         let xy3 = this.cskernels.add(xy, sobelXY3a, 0, 0);
         let xy4 = this.cskernels.add(xy3, sobelXY3b, 0, 0);
-        //var texGray = this.cskernels.gray(xy4, 0, 0);
-        //var edgs = this.cskernels.bin01(texGray, 0.06, 0, 0);
+        // var texGray = this.cskernels.gray(xy4, 0, 0);
+        // var edgs = this.cskernels.bin01(texGray, 0.06, 0, 0);
         this.cskernels.conv3x3.setImmutable(false);
         this.cskernels.add.setImmutable(false);
         return this.present(xy4, dstCanvas, image.width, image.height);
@@ -644,7 +656,7 @@ function createOp3whfunction(kernelname) {
 
 for (var fk
          of [['grayscale', 'gray'], ['invert'], ['red'], ['blue'], ['green'],
-             ['sepia'], ['mirror'], ['flip']]) {
+             ['sepia'], ['mirror'], ['flip'], ['contrast']]) {
     let funcname = fk[0];
     let filtername = (fk.length == 1) ? fk[0] : fk[1];
     LenaGPU.prototype[funcname] = createOp3whfunction(filtername);
