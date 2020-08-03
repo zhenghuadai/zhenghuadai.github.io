@@ -169,7 +169,7 @@ text-overflow:ellipsis; overflow:hidden;
     var X = 512, Y = 512, Z = 1;
     (function(){
         let testcases = [
-                'smm_naive', 'texture', 'texture2', 'img_texture', 'img_dwt'
+                'smm_naive', 'texture', 'texture2', 'img_texture', 'img_dwt', 'histogram'
         ];
         // clang-format off
         function glsl_smm_naive(A,B,C){
@@ -228,12 +228,38 @@ text-overflow:ellipsis; overflow:hidden;
                 dst[y + YSize()][x + XSize()] = (p00 + p11 - p01 - p10) / 4.0;
                 `;
             }
+        function glsl_histogram(src, dst){
+                return `
+                vec4 pixel = src[thread.xy]; 
+                float gray = 0.2126 * pixel.r + 0.7152 * pixel.g + 0.0722 * pixel.b;
+                int grayu = int(floor(gray * 255.0));
+                grayu = grayu & 255;
+                dst[grayu] = dst[grayu] + 1.0;
+                //int ru = int(floor(pixel.r*255.0));
+                //int gu = int(floor(pixel.g*255.0));
+                //int bu = int(floor(pixel.b*255.0));
+                //dst[ru + 256] = dst[ru+256] + 1.0;
+                //dst[gu + 256*2] = dst[gu+256*2] + 1.0;
+                //dst[bu + 256*3] = dst[bu+256*3] + 1.0;
+                `;
+        }
+        function glsl_replace(src, dst, histo){
+                return `
+                vec4 pixel = src[thread.xy]; 
+                float gray = 0.2126 * pixel.r + 0.7152 * pixel.g + 0.0722 * pixel.b;
+                int grayu = int(floor(gray * 255.0));
+                grayu = grayu & 255;
+                float r = histo[grayu];
+                dst[thread.xy] = vec4(r, r, r, 1.0);
+                `;
+        }
         // clang-format on
         glsl_kernels.smm_naive = glsl_smm_naive;
         glsl_kernels.texture     = glsl_texture;
         glsl_kernels.texture2    = glsl_texture2;
         glsl_kernels.img_texture    = glsl_texture2;
         glsl_kernels.img_dwt        = glsl_img_dwt;
+        glsl_kernels.histogram      = glsl_histogram;
 
     // menus for example 
     (function() {
@@ -340,7 +366,7 @@ text-overflow:ellipsis; overflow:hidden;
         };
 
 
-        do_cs.do_img_texture= function(kernel_name){
+        do_cs.do_img_texture = function(kernel_name){
             if(cs_kernels['texture2'] == null){
                 cs_kernels['texture2'] = webCS.createShader(glsl_texture2, { local_size:[8, 8, 1], groups:[X/8, Y/8, 1], params:{src:'texture', 'dst':'texture'}});
             }
@@ -352,13 +378,49 @@ text-overflow:ellipsis; overflow:hidden;
             webCS.present(tex);
             $("#display1")[0].appendChild(webCS.canvas);
             $("#canvas2GPU").show();
-        }
+        };
+
+        do_cs.do_histogram = function(kernel_name){
+            if(cs_kernels['histogram '] == null){
+                cs_kernels['histogram '] = webCS.createShader(glsl_histogram, { local_size:[8, 8, 1], groups:[X/8, Y/8, 1], params:{src:'texture', 'dst':'float[]'}});
+            }
+            let texSrc = $('#image000')[0];
+            let bufHis = webCS.createBuffer(256*4*4);
+            cs_kernels['histogram '].run(texSrc, bufHis);
+
+            let histogram = cs_kernels['histogram '].getData('dst', 'float');
+            for(let ii = 1; ii < 256; ii++){
+                   histogram[ii] = histogram[ii-1] + histogram[ii];
+            }
+            let cdf0 = 0, cdf1 = histogram[255];
+            let newColor = new Float32Array(256);
+            for(let ii = 0; ii < 256; ii++){
+                if(histogram[ii] == 0){
+                    continue;
+                }
+                if(cdf0 == 0){
+                    cdf0 = histogram[ii];
+                }
+                newColor[ii] = (histogram[ii] - cdf0) / (cdf1 - cdf0)  * 255.0 / 255.0;
+            }
+            console.log(histogram);
+
+            if(cs_kernels['replace'] == null){
+                cs_kernels['replace'] = webCS.createShader(glsl_replace, { local_size:[8, 8, 1], groups:[X/8, Y/8, 1], params:{src:'texture', 'dst':'texture', histo:'float[]'}});
+            }
+            cs_kernels['replace'].run(texSrc, null, newColor);
+            let tex = cs_kernels['replace'].getTexture('dst');
+            webCS.present(tex);
+            $("#display1")[0].appendChild(webCS.canvas);
+            $("#canvas2GPU").show();
+        };
+
         function doExampleGPU(e, ui) {
             let myfilter = ui.item.attr('data-filter');
             $(".code.example").hide();
             $("#canvas2GPU").hide();
             $("#code_"+myfilter).show();
-            do_cs["do_" + myfilter]();
+            do_cs["do_" + myfilter](myfilter);
         }
         function doExample(e, ui) {
             let myfilter = ui.item.attr('data-filter');
