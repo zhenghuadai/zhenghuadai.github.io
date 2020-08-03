@@ -539,6 +539,11 @@ class WebCS {
         }
     }
 
+    addFunctions(func){
+        this.glsl_functions =  this.glsl_functions || ""; 
+        this.glsl_functions += func;
+    }
+
     present(tex) {
         let gl = this.gl;
         const frameBuffer = gl.createFramebuffer();

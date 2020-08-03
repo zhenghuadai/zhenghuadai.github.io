@@ -85,7 +85,7 @@ $(function app() {
                 'laplacian', 'lowpass5', 'prewittVertical', 'prewittHorizontal',
                 'roberts', 'sharpen', 'sobelVertical', 'sobelHorizontal', 'sobelXY'
             ];
-            let faces = ['bigmouse'];
+            let faces = ['bigmouse', 'smallHead'];
             function doone(thefilters, themenu) {
                 let ula = $('<ul/>');
                 thefilters.forEach(function(ele) {
@@ -183,7 +183,7 @@ $(function app() {
     let webCS = null;
     // face menu
     (function() {
-        async function testface() {
+        async function testface(filtername) {
             const input = $('#image000')[0];
             let canvas = $('#canvasimg0')[0];
             let canvas2 = $('#canvasGPU')[0];
@@ -201,14 +201,27 @@ $(function app() {
                 webCS = new WebCS({canvas: c2});
                 haha = new HahaFace(webCS, fullFaceDescriptions);
             }
-            haha.bigmouse(canvas);
+            haha[filtername](canvas);
         }
 
+        async function testface1(filtername) {
+            const input = $('#image000')[0];
+            let canvas = $('#canvasimg0')[0];
+            let canvas2 = $('#canvasGPU')[0];
+            if (fullFaceDescriptions == null) {
+            }
+            if (haha == null) {
+                let c2 = $('#canvas2GPU')[0];
+                webCS = new WebCS({canvas: c2});
+                haha = new HahaFace(webCS, fullFaceDescriptions);
+            }
+            haha[filtername](canvas);
+        }
         function doface(e, ui) {
             let myfilter = ui.item.attr('data-filter');
             if (myfilter == null) return;
+            testface(myfilter);
             if (myfilter == 'bigmouse') {
-                testface();
             }
         }
         $('#facemenu').menu({select: doface});
