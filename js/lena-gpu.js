@@ -203,13 +203,13 @@ cfunc = {
         var dy = 0;
         var xy = 0;
         // clang-format off
-            dy = dot3(pixel00[0], pixel01[0], pixel02[0],  1.0/4,  2.0/4,  1.0/4)
-               + dot3(pixel20[0], pixel21[0], pixel22[0], -1.0/4, -2.0/4, -1.0/4);
-            dx = dot3(pixel00[0], pixel10[0], pixel20[0],  1.0/4,  2.0/4,  1.0/4)
-               + dot3(pixel02[0], pixel12[0], pixel22[0], -1.0/4, -2.0/4, -1.0/4);
-            xy = dot3(pixel00[0], pixel01[0], pixel02[0], 1.0, 1.0, 1.0)
-               + dot3(pixel10[0], pixel11[0], pixel12[0], 1.0, 1.0, 1.0)
-               + dot3(pixel20[0], pixel21[0], pixel22[0], 1.0, 1.0, 1.0);
+            dy = dot([pixel00[0], pixel01[0], pixel02[0], 1.0], [ 1.0/4.0,  2.0/4.0,  1.0/4.0, 0.0])
+               + dot([pixel20[0], pixel21[0], pixel22[0], 1.0], [-1.0/4.0, -2.0/4.0, -1.0/4.0, 0.0]);
+            dx = dot([pixel00[0], pixel10[0], pixel20[0], 1.0], [ 1.0/4.0,  2.0/4.0,  1.0/4.0, 0.0])
+               + dot([pixel02[0], pixel12[0], pixel22[0], 1.0], [-1.0/4.0, -2.0/4.0, -1.0/4.0, 0.0]);
+            xy = dot([pixel00[0], pixel01[0], pixel02[0], 1.0], [ 1.0/1.0, 1.0/1.0, 1.0/1.0, 0.0])
+               + dot([pixel10[0], pixel11[0], pixel12[0], 1.0], [ 1.0/1.0, 1.0/1.0, 1.0/1.0, 0.0])
+               + dot([pixel20[0], pixel21[0], pixel22[0], 1.0], [ 1.0/1.0, 1.0/1.0, 1.0/1.0, 0.0]);
         // clang-format on
 
         var grad = 0;
