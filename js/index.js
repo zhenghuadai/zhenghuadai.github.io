@@ -85,11 +85,13 @@ $(function app() {
             let myfilter = ui.item.attr('data-filter');
             if (myfilter) {
                 let dstCanvas = $('#canvasGPU')[0];
+                dstCanvas = null;
                 //let img = $('#image000')[0];
                 let img = $('#canvasimg0')[0];
                 let src = img;
                 if ($('#AddonToggleButton').is(':checked') && (canavasedGPU)) {
                     src = $('#canvasGPU000')[0]; 
+                    dstCanvas = $('#canvasGPU')[0];
                     // copy from dstCanvas to src, why it doesn't work?
                     src.width = dstCanvas.width;
                     src.height = dstCanvas.height;
