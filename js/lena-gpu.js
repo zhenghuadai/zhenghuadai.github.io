@@ -534,7 +534,7 @@ class LenaGPU {
             h = h || dstCanvas.height;
             dstCanvas.width = w;
             dstCanvas.height = h;
-            ctx.putImageData(new ImageData(mykernel.getPixels(), w, h), 0, 0);
+            ctx.drawImage(mykernel.canvas, 0, 0);
             return mykernel;
         }
     }

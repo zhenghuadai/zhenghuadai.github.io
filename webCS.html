@@ -249,8 +249,10 @@ text-overflow:ellipsis; overflow:hidden;
                 float gray = 0.2126 * pixel.r + 0.7152 * pixel.g + 0.0722 * pixel.b;
                 int grayu = int(floor(gray * 255.0));
                 grayu = grayu & 255;
-                float r = histo[grayu];
-                dst[thread.xy] = vec4(r, r, r, 1.0);
+                float new_gray = histo[grayu];
+                float diff_gray = new_gray - gray;
+                vec4 new_pixel = vec4(pixel.r + diff_gray * 0.2126, pixel.g + diff_gray * 0.7152, pixel.b + diff_gray * 0.0722, 1.0);
+                dst[thread.xy] = new_pixel;
                 `;
         }
         // clang-format on

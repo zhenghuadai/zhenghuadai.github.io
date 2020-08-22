@@ -37,6 +37,9 @@
     width:100%;
     height:100%;
 }
+.hiden{
+    display:none
+}
 </style>
 </head>
 <body>
@@ -92,9 +95,9 @@
         <div class='top-menu'>
             <label id="messagebox" class='ui-corner-all'></label>
         </div>
-        <div class='top-menu-right' >
-            <label for="AddonToggleButton" title='Use last output as input'>Add On</label>
-            <input type="checkbox" id="AddonToggleButton" />
+        <div class='top-menu-right hiden' style='display:none'>
+            <label for="AddonToggleButton"  title='Use last output as input'>Add On</label>
+            <input type="checkbox"  id="AddonToggleButton"/>
         </div>
         <div class='top-menu-right' >
             <label for="GPUToggleButton">GPU</label>
@@ -116,7 +119,7 @@
         <img id='image000' class='image display1' src='images/lenna.png' title0='Source Image'/>
         <canvas id='canvasimg0' class='image display1' style='display:none'></canvas>
         <canvas id='canvasCPU' class='canvas display1' title0='CPU Canvas'></canvas>
-        <canvas id='canvasGPU' class='canvas display1' title0='GPU Canvas'></canvas>
+        <canvas id='canvasGPU000' class='canvas display1 hiden' title0='GPU Canvas'></canvas>
     </div>
     <script>
     </script>

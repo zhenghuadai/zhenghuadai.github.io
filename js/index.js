@@ -84,12 +84,16 @@ $(function app() {
             let t = 0;
             let myfilter = ui.item.attr('data-filter');
             if (myfilter) {
-                let canvas = $('#canvasGPU')[0];
+                let dstCanvas = $('#canvasGPU')[0];
                 //let img = $('#image000')[0];
                 let img = $('#canvasimg0')[0];
                 let src = img;
                 if ($('#AddonToggleButton').is(':checked') && (canavasedGPU)) {
-                    src = canvas;
+                    src = $('#canvasGPU000')[0]; 
+                    // copy from dstCanvas to src, why it doesn't work?
+                    src.width = dstCanvas.width;
+                    src.height = dstCanvas.height;
+                    lenaGPU.present({canvas:dstCanvas}, src);
                 } 
                 if(myfilter == 'idct'){
                     src = last_dct_tex;
@@ -97,19 +101,20 @@ $(function app() {
                 {
                     let c;
                     const t0 = performance.now();
-                    c = lenaGPU[myfilter](src, canvas);
+                    c = lenaGPU[myfilter](src, dstCanvas);
                     if( myfilter == 'dct' || myfilter == 'idct'){
                         last_dct_tex = c;
-                        c = lenaGPU.present(c, canvas).canvas;
+                        c = lenaGPU.present(c, dstCanvas).canvas;
                     }else{
                         c = c.canvas;
                     }
                     if (c) {
-                        if (canavasedGPU == 0) {
+                        //if (canavasedGPU == 0) 
+                        {
                             $(c).addClass('gpu');
-                            $(c).attr('id', 'canvasgpu');
+                            $(c).attr('id', 'canvasGPU');
                         }
-                        //$("#display0")[0].appendChild(c);
+                        $("#display0")[0].appendChild(c);
 
                         canavasedGPU++;
                     }
