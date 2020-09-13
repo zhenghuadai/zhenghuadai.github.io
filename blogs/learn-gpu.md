@@ -2,7 +2,11 @@
 
 以将图像反色处理为例。
 
-## *首先编写kernel*
+## 确保chrom 支持WebGL2.0 Compute
+在chrome地址栏输入 chrome://flags/#enable-webgl2-compute-context
+点击"Enabled", 按提示重启chrome。
+
+## *编写kernel*
 ```c
 // 0. 函数名glsl_invert, 
 //    src 为输入图像(HTMLCanvasElement 或 HTMLImageElement)，
