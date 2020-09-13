@@ -604,6 +604,10 @@ $(function(){
             $("#code_div").show();
         }
     }
+    if(document.location.hash === '#practise')
+    {
+        $('#GPUToggleButton').prop("checked", true);
+    }
     setPractice();
     $('#GPUToggleButton').click(setPractice);
 });

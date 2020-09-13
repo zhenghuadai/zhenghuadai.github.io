@@ -17,7 +17,12 @@
   "//netdna.bootstrapcdn.com/font-awesome/3.2.1/css/font-awesome.css" rel=
   "stylesheet">
   <!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+  <script src='./js/highlight.min.js'></script>
+  <link rel='stylesheet' href='./css/highlight.min.css' />
+  <link rel='stylesheet' href='./css/md.css' />
 
+  <script src="//unpkg.com/showdown/dist/showdown.min.js">
+  </script>
   <script src="/js/jquery.min.js">
   </script>
   <script type="text/javascript">
@@ -37,7 +42,7 @@
     <div class="alignleft">
       <h1><a href=
       "http://uefi-uefi-node.193b.starter-ca-central-1.openshiftapps.com/index.html">
-      UEFI programming</a></h1>
+      </a></h1>
       <h2><a href="/"></a></h2>
     </div>
     <nav id="main-nav" class="alignright">
@@ -1099,6 +1104,8 @@
       <div class="widget tag">
         <h3 class="title">最新文章</h3>
         <ul class="entry">
+          <li><a id='gotolearngpu' onclick="showmd('/blogs/learn-gpu.md')">GPU 编程快速入门</a></li>
+          <li><a onclick="showmd('/blogs/uefi_reset_vector.md')">UEFI reset vector md</a></li>
           <li><a href="/2015/08/23/reset-vector/">UEFI reset vector</a></li>
           <li><a href="/lenaGPU.html">LenaGPU</a><li>
           <li><a href="/webCS.html">WebCS</a><li>
@@ -1130,6 +1137,32 @@
   dsq.src = '//' + disqus_shortname + '.disqus.com/count.js';
   (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
   }());
+  
+  var converter = new showdown.Converter({tables: true});
+  function showmd(url)
+  {
+	  $.get( url, function( data ) {
+          text = converter.makeHtml(data);
+		  $(".post-content").html(text);
+          $(".post-content").find("code").each(function(index){
+              let myobj = $(this);
+              let code = myobj.text();
+              let lang = (myobj.attr('class') || 'c').split(" ")[0];
+              let code1 = hljs.highlight(lang, code).value
+              texts = code1.split('\n');
+              lis = texts.map((x,i) => ((i%2)?"<li class='odd'>":"<li class='even'>") + x + "</li>");
+              ols = "<ol class='code'>" + lis.join("") + "</ol>";
+              myobj.html(ols);
+          });
+
+	  });
+  }
+  $(function(){
+    if(document.location.hash === '#learngpu')
+    {
+        $("#gotolearngpu").click();
+    }
+  });
   </script>
   <link rel="stylesheet" href="/fancybox/jquery.fancybox.css" media="screen"
   type="text/css">
