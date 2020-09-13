@@ -6,6 +6,11 @@
 <script src='./js/highlight.min.js'></script>
 <link rel='stylesheet' href='./css/jquery-ui.min.css' />
 <link rel='stylesheet' href='./css/highlight.min.css' />
+<script src="js/codemirror/codemirror.js"></script>
+<script src="js/codemirror/mode/javascript/javascript.js"></script>
+<script src="js/codemirror/mode/clike/clike.js"></script>
+<script src="js/codemirror/format.js"></script>
+<link rel="stylesheet" href="js/codemirror/codemirror.css">
 <style>
 .ui-menu { width: 150px; }
 #menus .top-menu {
@@ -122,8 +127,8 @@ text-overflow:ellipsis; overflow:hidden;
             <input type="checkbox" id="AddonToggleButton" />
         </div>
         <div class='top-menu-right' >
-            <label for="GPUToggleButton">GPU</label>
-            <input type="checkbox" id="GPUToggleButton" checked/>
+            <label for="GPUToggleButton">练习</label>
+            <input type="checkbox" id="GPUToggleButton" />
         </div>
         <div class='top-menu-right' >
             <div id='timediv'> <label id="time">0</label> ms </div>
@@ -148,6 +153,48 @@ text-overflow:ellipsis; overflow:hidden;
               -->
             </pre>
         </div>
+
+		<div id='practice_div'>
+            <br/>
+            <div>GLSL:</div>
+			<textarea id="practiseglsl" style="display: none;">
+function glsl_invert(src, dst){
+    return `
+    // 1. Get the Index
+    ivec2 pos = ivec2(thread.xy);
+    // 2. Get the input pixel form src
+    vec4 pixel = src[pos.y][pos.x]; 
+    // 3. Invert the pixel
+    vec4 invert = vec4(1.0 - pixel.x, 1.0 - pixel.y, 1.0 - pixel.z, 1.0);
+    // 4. Store the pixel into dst
+    dst[pos.y][pos.x] = invert;     
+    `;
+}
+			</textarea>
+            <br/>
+            <div>JavaScript:</div>
+			<textarea id="practisejs" style="display: none;">
+//1. Create instance of WebCS from canvas
+let webCS = new WebCS({canvas:$("#canvas2GPU")[0]}); //let webCS = new WebCS({width:512, height:512});
+
+//2. Create shader object
+let cs_texture2 = webCS.createShader(glsl_invert, { local_size:[8, 8, 1], params:{src:'texture', 'dst':'texture'}});
+
+//3. dispatch the shader
+let texSrc = $('#image000')[0];
+cs_texture2.setGroups(512/8, 512/8, 1).run(texSrc, null);
+
+//4. show the dst image to webCS.canvas
+let tex = cs_texture2.getTexture('dst');
+webCS.present(tex);
+
+//5. show the canvas
+$("#display1")[0].appendChild(webCS.canvas);
+			</textarea>
+
+            <div id='run_practise'> <label id="run_practise_lable">Execute</label></div>
+		</div>
+
         <div id='canvas_div'>
           <canvas id='canvas2GPU' class='canvas display1' title0='GPU Canvas' width=512 height=512></canvas>
         </div>
@@ -156,6 +203,7 @@ text-overflow:ellipsis; overflow:hidden;
         <img id='image000' class='image display0 cssize' src='images/lenna.png' title0='Source Image' style='display:block'/>
         <canvas id='canvasimg0' class='image display0' style='display:block'></canvas>
     </div>
+
     <script>
 
     let webCS = null;
@@ -433,10 +481,7 @@ text-overflow:ellipsis; overflow:hidden;
             if(myfilter == null){
                 return;
             }
-            if ($('#GPUToggleButton').is(':checked')) {
-                doExampleGPU(e, ui);
-            } else {
-            }
+		    doExampleGPU(e, ui);
         }
         $('#examplemenu').menu({select: doExample});
 
@@ -520,6 +565,48 @@ text-overflow:ellipsis; overflow:hidden;
         
 
     })();
+
+
+$(function(){
+
+	var editorglsl = CodeMirror.fromTextArea(document.getElementById("practiseglsl"), {
+		lineNumbers: true,
+		mode: "text/x-c++src",
+		matchBrackets: true
+	});
+	var editorjs = CodeMirror.fromTextArea(document.getElementById("practisejs"), {
+		lineNumbers: true,
+		mode: "javascript",
+		matchBrackets: true
+	});
+    $('#run_practise').button(); 
+    $('#run_practise').click(
+       function(){
+           formatall(editorglsl);
+           formatall(editorjs);
+	       let test_str = editorglsl.getValue() + "\n" + editorjs.getValue();
+           eval(test_str);
+       }
+    ); 
+
+    function formatall(editor){
+        let oldSize = editorglsl.getScrollInfo()
+        var totalLines = editor.lineCount();  
+        editor.autoFormatRange({line:0, ch:0}, {line:totalLines});
+        editorglsl.setSize(oldSize.width, oldSize.height);
+    }
+    function setPractice(){
+        if ($('#GPUToggleButton').is(':checked')) {
+            $("#practice_div").show();
+            $("#code_div").hide();
+        } else {
+            $("#practice_div").hide();
+            $("#code_div").show();
+        }
+    }
+    setPractice();
+    $('#GPUToggleButton').click(setPractice);
+});
     </script>
 <script src='./js/webCS.html.js'></script>
 </div>
