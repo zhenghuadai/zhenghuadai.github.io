@@ -483,7 +483,15 @@ $("#display1")[0].appendChild(webCS.canvas);
             if(myfilter == null){
                 return;
             }
+            disablePractice();
 		    doExampleGPU(e, ui);
+        }
+
+        function disablePractice(){
+            $('#GPUToggleButton').prop("checked", true);
+            $('#GPUToggleButton').click();
+            $("#practice_div").hide();
+            $("#code_div").show();
         }
         $('#examplemenu').menu({select: doExample});
 
