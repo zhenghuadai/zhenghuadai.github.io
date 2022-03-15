@@ -125,11 +125,11 @@ function _isArray(arg) {
   return Array.isArray(arg) || ArrayBuffer.isView(arg) && !(arg instanceof DataView);
 }
 class CSKernel {
-  constructor(prog, settings = {}) {
+  constructor(webCS2, prog, settings = {}) {
     this.kernel = prog;
     this.local_size = settings.local_size || [32, 1, 1];
     this.groups = settings.groups;
-    this.webCS = settings.webCS;
+    this.webCS = webCS2;
     this.vids = null;
     this.computePipeline = null;
     this.settings = settings;
@@ -150,7 +150,7 @@ class CSKernel {
     if (this.bindGroup) {
       passEncoder.setBindGroup(0, this.bindGroup);
     }
-    if (this.getNumberOfUniform() > 0) {
+    if (this.__getNumberOfUniform() > 0) {
       console.log(this.uniformBindGroup);
       passEncoder.setBindGroup(1, this.uniformBindGroup);
     }
@@ -160,7 +160,59 @@ class CSKernel {
     this.webCS.gpuDevice.queue.submit([gpuCommands]);
     await this.webCS.gpuDevice.queue.onSubmittedWorkDone();
   }
-  getNumberOfUniform() {
+  setUniform(name, ...rest) {
+    let device = this.webCS.gpuDevice;
+    let values = rest;
+    let mytype = this.settings.uniform[name].type;
+    const slot = this.settings.uniform[name].index;
+    let uniformValue = null;
+    if (mytype == "vec4<u32>") {
+      uniformValue = new Uint32Array(values);
+    } else if (mytype == "vec4<i32>") {
+      uniformValue = new int32Array(values);
+    } else if (mytype == "vec4<f32>") {
+      uniformValue = new Float32Array(values);
+    } else {
+      uniformValue = new Uint32Array(values);
+    }
+    let bufferSizeInBytes = 16;
+    if (this.uniformVids[slot] == null) {
+      this.uniformVids[slot] = device.createBuffer({
+        mappedAtCreation: true,
+        size: bufferSizeInBytes,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+      });
+      const hostAccessBuffer = this.uniformVids[slot].getMappedRange();
+      new uniformValue.constructor(hostAccessBuffer).set(uniformValue);
+      this.uniformVids[slot].unmap();
+    } else {
+      device.queue.writeBuffer(this.uniformVids[slot], 0, uniformValue.buffer, uniformValue.byteOffset, uniformValue.byteLength);
+    }
+    return this;
+  }
+  getTexture(name) {
+    return this.getBuffer(name);
+  }
+  getBuffer(name) {
+    if (typeof name === "string") {
+      let findIndex = function(o, value) {
+        return o.indexOf(value);
+      };
+      let index = findIndex(this.settings.params.all, name);
+      return this.vids[index];
+    } else if (typeof name === "number") {
+      return this.vids[name];
+    }
+  }
+  async getData(name, dstarray) {
+    let vid = this.getBuffer(name);
+    return await this.webCS.getData(vid, dstarray);
+  }
+  setGroups(x, y = 1, z = 1) {
+    this.groups = [x, y, z];
+    return this;
+  }
+  __getNumberOfUniform() {
     return this.settings.uniform ? Object.keys(this.settings.uniform).length : 0;
   }
   __createPipeline() {
@@ -332,63 +384,6 @@ class CSKernel {
   __str2sfmt(str) {
     return this.webCS.Str2SFmt[str] || "rgba8unorm";
   }
-  setUniform(name, ...rest) {
-    let device = this.webCS.gpuDevice;
-    let values = rest;
-    let mytype = this.settings.uniform[name].type;
-    const slot = this.settings.uniform[name].index;
-    let uniformValue = null;
-    if (mytype == "vec4<u32>") {
-      uniformValue = new Uint32Array(values);
-    } else if (mytype == "vec4<i32>") {
-      uniformValue = new int32Array(values);
-    } else if (mytype == "vec4<f32>") {
-      uniformValue = new Float32Array(values);
-    } else {
-      uniformValue = new Uint32Array(values);
-    }
-    let bufferSizeInBytes = 16;
-    if (this.uniformVids[slot] == null) {
-      this.uniformVids[slot] = device.createBuffer({
-        mappedAtCreation: true,
-        size: bufferSizeInBytes,
-        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-      });
-      const hostAccessBuffer = this.uniformVids[slot].getMappedRange();
-      new uniformValue.constructor(hostAccessBuffer).set(uniformValue);
-      this.uniformVids[slot].unmap();
-    } else {
-      device.queue.writeBuffer(this.uniformVids[slot], 0, uniformValue.buffer, uniformValue.byteOffset, uniformValue.byteLength);
-    }
-    return this;
-  }
-  getTexture(name) {
-    return this.getBuffer(name);
-  }
-  getBuffer(name) {
-    if (typeof name === "string") {
-      let findIndex = function(o, value) {
-        return o.indexOf(value);
-      };
-      let index = findIndex(this.settings.params.all, name);
-      return this.vids[index];
-    } else if (typeof name === "number") {
-      return this.vids[name];
-    }
-  }
-  bindBuffer(name) {
-    var gl = this.webCS.gl;
-    let vid = this.getBuffer(name);
-    gl.bindBuffer(gl.SHADER_STORAGE_BUFFER, vid);
-  }
-  async getData(name, dstarray) {
-    let vid = this.getBuffer(name);
-    return await this.webCS.getData(vid, dstarray);
-  }
-  setGroups(x, y = 1, z = 1) {
-    this.groups = [x, y, z];
-    return this;
-  }
   async __updateArgments(args) {
     let nargs = this.settings.params.all.length;
     this.vids = this.vids || Array.from({ length: nargs }, (v, i2) => null);
@@ -474,48 +469,12 @@ class WebCS {
     const device = await adapter.requestDevice();
     return new WebCS(adapter, device, settings);
   }
-  __setFmt() {
-    let fmts = [
-      ["rgba8unorm", "rgba8unorm", "f32", "rgba8"],
-      ["rgba8unorm", "rgba8unorm", "f32", "rgba"],
-      ["rgba8unorm", "rgba8unorm", "f32", "rgba8unorm"],
-      ["rgba8snorm", "rgba8snorm", "f32", "rgba8snorm"],
-      ["rgba8uint", "rgba8uint", "u32", "rgba8uint"],
-      ["rgba8sint", "rgba8sint", "i32", "rgba8sint"],
-      ["rgba16uint", "rgba16uint", "u32", "rgba16uint"],
-      ["rgba16sint", "rgba16sint", "i32", "rgba16sint"],
-      ["rgba16float", "rgba16float", "f32", "rgba16float"],
-      ["r32uint", "r32uint", "u32", "r32uint"],
-      ["r32sint", "r32sint", "i32", "r32sint"],
-      ["r32float", "r32float", "f32", "r32float"],
-      ["rg32uint", "rg32uint", "u32", "rg32uint"],
-      ["rg32sint", "rg32sint", "i32", "rg32sint"],
-      ["rg32float", "rg32float", "f32", "rg32float"],
-      ["rgba32uint", "rgba32uint", "u32", "rgba32uint"],
-      ["rgba32sint", "rgba32sint", "i32", "rgba32sint"],
-      ["rgba32float", "rgba32float", "f32", "rgba32float"]
-    ];
-    for (let fmt of fmts) {
-      this.SFmt2DataType[fmt[0]] = fmt[2];
-      this.SFmt2Fmt[fmt[0]] = fmt[1];
-      this.Str2SFmt[fmt[3]] = fmt[0];
-    }
-  }
-  __sfmt2datatype(fmt) {
-    return this.SFmt2DataType[fmt] || "f32";
-  }
-  __sfmt2fmt(fmt) {
-    return this.SFmt2Fmt[fmt] || "rgba8unorm";
-  }
-  __str2sfmt(str) {
-    return this.Str2SFmt[str] || "rgba8unorm";
-  }
   createShaderFromString(source, settings = {}) {
     const shaderModule = this.gpuDevice.createShaderModule({ code: source });
-    settings.webCS = this;
     settings.commandEncoder = this.gpuDevice.createCommandEncoder();
     this.commandEncoder = settings.commandEncoder;
-    return new CSKernel(shaderModule, settings);
+    let webCS2 = this;
+    return new CSKernel(webCS2, shaderModule, settings);
   }
   createShaderFromFunction(func, settings = {}) {
     let csmain_str = func();
@@ -563,6 +522,34 @@ class WebCS {
           } else {
             func_si = csmain_nocomments.indexOf("function", func_si + 8);
           }
+        }
+      }
+    }
+    {
+      let func_si = csmain_nocomments.indexOf("const");
+      if (func_si > 0) {
+        while (func_si > 0) {
+          if (isWhite(csmain_nocomments[func_si + 5])) {
+            let funcEndI = csmain_nocomments.indexOf(";", func_si + 5) + 1;
+            let myvar = "let " + csmain_nocomments.substring(func_si + 5, funcEndI);
+            global_func_str = global_func_str + "\n" + myvar;
+            csmain_nocomments = csmain_nocomments.substring(0, func_si) + csmain_nocomments.substring(funcEndI);
+            func_si = csmain_nocomments.indexOf("const");
+          } else {
+            func_si = csmain_nocomments.indexOf("const", func_si + 5);
+          }
+        }
+      }
+    }
+    {
+      let func_si = csmain_nocomments.indexOf("var<workgroup>");
+      if (func_si > 0) {
+        while (func_si > 0) {
+          let funcEndI = csmain_nocomments.indexOf(";", func_si + 14) + 1;
+          let myvar = csmain_nocomments.substring(func_si, funcEndI);
+          global_func_str = global_func_str + "\n" + myvar;
+          csmain_nocomments = csmain_nocomments.substring(0, func_si) + csmain_nocomments.substring(funcEndI);
+          func_si = csmain_nocomments.indexOf("var<workgroup>");
         }
       }
     }
@@ -618,8 +605,8 @@ class WebCS {
           }
         }
         for (let paramname of settings.params.all) {
-          let memaccessor = new RegExp(["(", paramname, ")", "\\s*\\["].join(""), "g");
-          csmain_nocomments = csmain_nocomments.replace(memaccessor, "$1.data[");
+          let memaccessor = new RegExp(["[\\W](", paramname, ")", "\\s*\\["].join(""), "g");
+          csmain_nocomments = csmain_nocomments.replace(memaccessor, " $1.data[");
         }
       }
       for (var pi = 0; pi < params.length; pi++) {
@@ -724,18 +711,21 @@ class WebCS {
         ${layout_str} 
         ${unform_str}
         ${global_str}
-        var<private> workgroup_id:vec3<u32>;
+        let LOCAL_SIZE_X:u32 = ${local_size[0]}u;
+        let LOCAL_SIZE_Y:u32 = ${local_size[1]}u;
+        let LOCAL_SIZE_Z:u32 = ${local_size[2]}u;
         var<private> num_workgroups:vec3<u32>;
+        var<private> workgroup_id:vec3<u32>;
         ${global_func_str}
-        fn csmain(thread: vec3<u32>, block:vec3<u32>){
+        fn csmain(thread: vec3<u32>, localthread:vec3<u32>, workgroup_id:vec3<u32>){
             ${csmain_nocomments}
         }
         @stage(compute) @workgroup_size(${local_size[0]}, ${local_size[1]}, ${local_size[2]})
 
-        fn main(@builtin(global_invocation_id) thread: vec3<u32>, @builtin(workgroup_id) block: vec3<u32>, @builtin(num_workgroups) wgs:vec3<u32>) {
-            workgroup_id = block;
+        fn main(@builtin(global_invocation_id) thread: vec3<u32>, @builtin(local_invocation_id) localthread: vec3<u32>, @builtin(workgroup_id) block: vec3<u32>, @builtin(num_workgroups) wgs:vec3<u32>) {
             num_workgroups = wgs;
-            csmain(thread, block);
+            workgroup_id = block;
+            csmain(thread, localthread, block);
         }
         `;
     return this.createShaderFromString(source, settings);
@@ -805,39 +795,39 @@ class WebCS {
       size: presentationSize
     });
     const fullscreenTexturedQuadWGSL = `
-		@group(0) @binding(0) var mSampler : sampler;
-		@group(0) @binding(1) var mTexture : texture_2d<f32>;
+        @group(0) @binding(0) var mSampler : sampler;
+        @group(0) @binding(1) var mTexture : texture_2d<f32>;
 
-		struct VertexOutput {
-			@builtin(position) Position : vec4<f32>;
-			@location(0) fragUV : vec2<f32>;
-		};
+        struct VertexOutput {
+            @builtin(position) Position : vec4<f32>;
+            @location(0) fragUV : vec2<f32>;
+        };
 
-		@stage(vertex)
-		fn vert_main(@builtin(vertex_index) VertexIndex : u32) -> VertexOutput {
-			var pos = array<vec2<f32>, 4>(
-				vec2<f32>( 1.0,  1.0),
-				vec2<f32>( 1.0, -1.0),
-				vec2<f32>(-1.0,  1.0),
-				vec2<f32>(-1.0,  -1.0));
+        @stage(vertex)
+        fn vert_main(@builtin(vertex_index) VertexIndex : u32) -> VertexOutput {
+            var pos = array<vec2<f32>, 4>(
+                vec2<f32>( 1.0,  1.0),
+                vec2<f32>( 1.0, -1.0),
+                vec2<f32>(-1.0,  1.0),
+                vec2<f32>(-1.0,  -1.0));
 
-			var uv = array<vec2<f32>, 4>(
-				vec2<f32>(1.0, 0.0),
-				vec2<f32>(1.0, 1.0),
-				vec2<f32>(0.0, 0.0),
-				vec2<f32>(0.0, 1.0));
+            var uv = array<vec2<f32>, 4>(
+                vec2<f32>(1.0, 0.0),
+                vec2<f32>(1.0, 1.0),
+                vec2<f32>(0.0, 0.0),
+                vec2<f32>(0.0, 1.0));
 
-			var output : VertexOutput;
-			output.Position = vec4<f32>(pos[VertexIndex], 0.0, 1.0);
-			output.fragUV = uv[VertexIndex];
-			return output;
-		}
+            var output : VertexOutput;
+            output.Position = vec4<f32>(pos[VertexIndex], 0.0, 1.0);
+            output.fragUV = uv[VertexIndex];
+            return output;
+        }
 
-		@stage(fragment)
-		fn frag_main(@location(0) fragUV : vec2<f32>) -> @location(0) vec4<f32> {
+        @stage(fragment)
+        fn frag_main(@location(0) fragUV : vec2<f32>) -> @location(0) vec4<f32> {
             var color:vec4<f32> = textureSample(mTexture, mSampler, fragUV);
             return color;
-		}
+        }
         `;
     const fullscreenQuadPipeline = device.createRenderPipeline({
       vertex: {
@@ -974,17 +964,124 @@ class WebCS {
     gpuReadBuffer.unmap();
     return dstarray;
   }
+  __setFmt() {
+    let fmts = [
+      ["rgba8unorm", "rgba8unorm", "f32", "rgba8"],
+      ["rgba8unorm", "rgba8unorm", "f32", "rgba"],
+      ["rgba8unorm", "rgba8unorm", "f32", "rgba8unorm"],
+      ["rgba8snorm", "rgba8snorm", "f32", "rgba8snorm"],
+      ["rgba8uint", "rgba8uint", "u32", "rgba8uint"],
+      ["rgba8sint", "rgba8sint", "i32", "rgba8sint"],
+      ["rgba16uint", "rgba16uint", "u32", "rgba16uint"],
+      ["rgba16sint", "rgba16sint", "i32", "rgba16sint"],
+      ["rgba16float", "rgba16float", "f32", "rgba16float"],
+      ["r32uint", "r32uint", "u32", "r32uint"],
+      ["r32sint", "r32sint", "i32", "r32sint"],
+      ["r32float", "r32float", "f32", "r32float"],
+      ["rg32uint", "rg32uint", "u32", "rg32uint"],
+      ["rg32sint", "rg32sint", "i32", "rg32sint"],
+      ["rg32float", "rg32float", "f32", "rg32float"],
+      ["rgba32uint", "rgba32uint", "u32", "rgba32uint"],
+      ["rgba32sint", "rgba32sint", "i32", "rgba32sint"],
+      ["rgba32float", "rgba32float", "f32", "rgba32float"]
+    ];
+    for (let fmt of fmts) {
+      this.SFmt2DataType[fmt[0]] = fmt[2];
+      this.SFmt2Fmt[fmt[0]] = fmt[1];
+      this.Str2SFmt[fmt[3]] = fmt[0];
+    }
+  }
+  __sfmt2datatype(fmt) {
+    return this.SFmt2DataType[fmt] || "f32";
+  }
+  __sfmt2fmt(fmt) {
+    return this.SFmt2Fmt[fmt] || "rgba8unorm";
+  }
+  __str2sfmt(str) {
+    return this.Str2SFmt[str] || "rgba8unorm";
+  }
 }
+function displayMatrix(matrix2, name, el, rows, cols, idxBase) {
+  if (idxBase == void 0) {
+    idxBase = 0;
+  }
+  let str = [];
+  const MAXCOL = 6;
+  const MAXROW = 6;
+  function makestr(f) {
+    return f.toFixed(8);
+  }
+  if (rows < MAXROW && cols < MAXCOL) {
+    let idx = idxBase;
+    for (var row = 0; row < rows; row++) {
+      str.push("<tr>");
+      for (var col = 0; col < cols; col++) {
+        str.push("<td>" + makestr(matrix2[idx]) + " </td>");
+        idx = idx + 1;
+      }
+      str.push("</tr>");
+    }
+  } else {
+    let addRow2 = function(row2) {
+      const idx = idxBase;
+      str.push("<tr>");
+      if (cols > MAXCOL) {
+        str.push("<td>" + makestr(matrix2[idx + row2 * cols + 0]) + " </td>");
+        str.push("<td>" + makestr(matrix2[idx + row2 * cols + 1]) + " </td>");
+        str.push("<td>" + makestr(matrix2[idx + row2 * cols + 2]) + " </td>");
+        str.push("<td> ... </td>");
+        str.push("<td>" + makestr(matrix2[idx + row2 * cols + cols - 3]) + " </td>");
+        str.push("<td>" + makestr(matrix2[idx + row2 * cols + cols - 2]) + " </td>");
+        str.push("<td>" + makestr(matrix2[idx + row2 * cols + cols - 1]) + " </td>");
+      } else {
+        for (var ii = 0; ii < cols; ii++) {
+          str.push("<td>" + makestr(matrix2[idx + row2 * cols + ii]) + " </td>");
+        }
+      }
+      str.push("</tr>");
+    }, addEmptyRow2 = function() {
+      str.push("<tr>");
+      for (var ii = 0; ii < (cols < 7 ? cols : 7); ii++) {
+        str.push("<td> ... </td>");
+      }
+      str.push("</tr>");
+    };
+    var addRow = addRow2, addEmptyRow = addEmptyRow2;
+    if (rows > 6) {
+      addRow2(0);
+      addRow2(1);
+      addRow2(2);
+      addEmptyRow2();
+      addRow2(rows - 3);
+      addRow2(rows - 2);
+      addRow2(rows - 1);
+    } else {
+      for (var jj = 0; jj < rows; jj++) {
+        addRow2(jj);
+      }
+    }
+  }
+  let matrixBody = "<table class='matrix'><tbody>" + str.join("") + "</tbody></table>";
+  let matrixHtml = `
+            <table class="w3-large"><tbody><tr>
+            <td>${name}(${rows}x${cols})  =&nbsp;&nbsp;</td>
+            <td> ${matrixBody}</td>
+            </tr></tbody></table>
+
+            `;
+  el.innerHTML = matrixHtml;
+}
+var matrix = "";
 let webCS = null;
 let cs_smm_naive = null;
 let cs_texture = null;
 let cs_kernels = {};
-let glsl_kernels = {};
+let gpu_kernels = {};
 let do_cs = {};
 var X = 512, Y = 512;
 (function() {
   let testcases = ["smm_naive", "texture", "texture2", "img_texture", "img_dwt", "histogram"];
-  function glsl_smm_naive(A, B, C) {
+  function gpu_smm_naive(A, B, C) {
     return `
                // C[M, N] = A[M, K] * B[K, N]
                var M:u32 = this.uniform.MNK.x;
@@ -1001,12 +1098,12 @@ var X = 512, Y = 512;
                C[thread.y*N + thread.x] = sum;
            `;
   }
-  function glsl_texcopy(src, dst) {
+  function gpu_texcopy(src, dst) {
     return `
         dst[thread.y][thread.x] = src[thread.y][thread.x];     
         `;
   }
-  function glsl_texture2(src, dst) {
+  function gpu_texture2(src, dst) {
     return `
         var pos:vec2<u32> = vec2<u32>(thread.xy);
         // vec4 pixel = imageLoad(src, pos); or vec4 pixel = src[pos]
@@ -1016,7 +1113,7 @@ var X = 512, Y = 512;
         dst[pos.y][pos.x] = invert;     
     `;
   }
-  function glsl_texture(dst) {
+  function gpu_texture(dst) {
     return `
         var pos:vec2<u32> = vec2<u32>(thread.xy);
         var x : f32 = f32(thread.x);
@@ -1025,7 +1122,7 @@ var X = 512, Y = 512;
         dst[thread.y][thread.x] =  vec4<f32>(x / (y+1.0+x), y / (y+1.0+x),  0.0, 1.0);
         `;
   }
-  function glsl_img_dwt(src, dst) {
+  function gpu_img_dwt(src, dst) {
     return `
         function  YSize() -> u32{ return u32(workgroup_id.y*num_workgroups.y);}
         function  XSize() -> u32{ return u32(workgroup_id.x*num_workgroups.x);} 
@@ -1041,7 +1138,7 @@ var X = 512, Y = 512;
         dst[y + YSize()][x + XSize()] = (p00 + p11 - p01 - p10) / 4.0;
         `;
   }
-  function glsl_histogram(src, dst) {
+  function gpu_histogram(src, dst) {
     return `
         var pixel:vec4<f32> = src[thread.xy]; 
         var gray: f32 = 0.2126 * pixel.r + 0.7152 * pixel.g + 0.0722 * pixel.b;
@@ -1056,7 +1153,7 @@ var X = 512, Y = 512;
         //dst[bu + 256*3] = dst[bu+256*3] + 1.0;
 `;
   }
-  function glsl_replace(src, dst, histo) {
+  function gpu_replace(src, dst, histo) {
     return `
         var pixel : vec4<f32> = src[thread.xy]; 
         var gray:f32 = 0.2126 * pixel.r + 0.7152 * pixel.g + 0.0722 * pixel.b;
@@ -1068,12 +1165,12 @@ var X = 512, Y = 512;
         dst[thread.xy] = new_pixel;
         `;
   }
-  glsl_kernels.smm_naive = glsl_smm_naive;
-  glsl_kernels.texture = glsl_texture;
-  glsl_kernels.texture2 = glsl_texture2;
-  glsl_kernels.img_texture = glsl_texture2;
-  glsl_kernels.img_dwt = glsl_img_dwt;
-  glsl_kernels.histogram = glsl_histogram;
+  gpu_kernels.smm_naive = gpu_smm_naive;
+  gpu_kernels.texture = gpu_texture;
+  gpu_kernels.texture2 = gpu_texture2;
+  gpu_kernels.img_texture = gpu_texture2;
+  gpu_kernels.img_dwt = gpu_img_dwt;
+  gpu_kernels.histogram = gpu_histogram;
   (function() {
     (function appendmenu() {
       function doone(thefilters, themenu) {
@@ -1098,7 +1195,7 @@ var X = 512, Y = 512;
       let cpuB = createArray(K * N);
       let cpuC = createArray(M * N);
       if (cs_smm_naive == null) {
-        cs_smm_naive = webCS.createShader(glsl_smm_naive, { local_size: [8, 8, 1], groups: [M / 8, N / 8, 1] });
+        cs_smm_naive = webCS.createShader(gpu_smm_naive, { local_size: [8, 8, 1], groups: [M / 8, N / 8, 1] });
       }
       const t0 = performance.now();
       await cs_smm_naive.run(cpuA, cpuB, cpuC, { "MNK": [M, N, K, 0] });
@@ -1115,12 +1212,16 @@ var X = 512, Y = 512;
         result = result.toFixed(7);
         diff = diff.toFixed(7);
         App.showMessage(`Cgpu[${y},${x}] = ${result}; \u2003<br/> Cgpu[${y},${x}] - Ccpu[${y},${x}] : ${diff}`);
+        displayMatrix(cpuA, "gpuA", $("#data0_div")[0], M, K);
+        displayMatrix(cpuB, "gpuB", $("#data1_div")[0], K, K);
+        displayMatrix(cpuC, "gpuC", $("#data2_div")[0], M, N);
+        $("#data_div").show();
       }
       $("#code_smm_naive").show();
     };
     do_cs.do_texture = async function(kernel_name) {
       if (cs_texture == null) {
-        cs_texture = webCS.createShader(glsl_texture, { local_size: [8, 8, 1], groups: [X / 8, Y / 8, 1], params: { "dst": "texture" } });
+        cs_texture = webCS.createShader(gpu_texture, { local_size: [8, 8, 1], groups: [X / 8, Y / 8, 1], params: { "dst": "texture" } });
       }
       await cs_texture.run(null);
       let tex = cs_texture.getTexture("dst");
@@ -1131,7 +1232,7 @@ var X = 512, Y = 512;
     do_cs.do_texture2 = async function(kernel_name) {
       do_cs.do_texture();
       if (cs_kernels["texture2"] == null) {
-        cs_kernels["texture2"] = webCS.createShader(glsl_texture2, { local_size: [8, 8, 1], groups: [X / 8, Y / 8, 1], params: { src: "[][]", "dst": "rgba8[][]" } });
+        cs_kernels["texture2"] = webCS.createShader(gpu_texture2, { local_size: [8, 8, 1], groups: [X / 8, Y / 8, 1], params: { src: "[][]", "dst": "rgba8[][]" } });
       }
       let texSrc = cs_texture.getTexture("dst");
       await cs_kernels["texture2"].run(texSrc, null);
@@ -1142,10 +1243,10 @@ var X = 512, Y = 512;
     };
     do_cs.do_img_dwt = async function(kernel_name) {
       if (cs_kernels.cs_img_dwt == null) {
-        cs_kernels.cs_img_dwt = webCS.createShader(glsl_img_dwt, { local_size: [8, 8, 1], groups: [X / 16, Y / 16, 1], params: { src: "texture", "dst": "texture" } });
+        cs_kernels.cs_img_dwt = webCS.createShader(gpu_img_dwt, { local_size: [8, 8, 1], groups: [X / 16, Y / 16, 1], params: { src: "texture", "dst": "texture" } });
       }
       if (cs_kernels.cs_texcopy == null) {
-        cs_kernels.cs_texcopy = webCS.createShader(glsl_texcopy, { local_size: [8, 8, 1], groups: [X / 8, Y / 8, 1], params: { src: "[][]", "dst": "[][]" } });
+        cs_kernels.cs_texcopy = webCS.createShader(gpu_texcopy, { local_size: [8, 8, 1], groups: [X / 8, Y / 8, 1], params: { src: "[][]", "dst": "[][]" } });
       }
       let texSrc = $("#image000")[0];
       let texDst1 = webCS.createTexture();
@@ -1160,7 +1261,7 @@ var X = 512, Y = 512;
     };
     do_cs.do_img_texture = async function(kernel_name) {
       if (cs_kernels["texture2"] == null) {
-        cs_kernels["texture2"] = webCS.createShader(glsl_texture2, { local_size: [8, 8, 1], groups: [X / 8, Y / 8, 1], params: { src: "texture", "dst": "texture" } });
+        cs_kernels["texture2"] = webCS.createShader(gpu_texture2, { local_size: [8, 8, 1], groups: [X / 8, Y / 8, 1], params: { src: "texture", "dst": "texture" } });
       }
       let texSrc = $("#image000")[0];
       await cs_kernels["texture2"].run(texSrc, null);
@@ -1171,7 +1272,7 @@ var X = 512, Y = 512;
     };
     do_cs.do_histogram = async function(kernel_name) {
       if (cs_kernels["histogram "] == null) {
-        cs_kernels["histogram "] = webCS.createShader(glsl_histogram, { local_size: [8, 8, 1], groups: [X / 8, Y / 8, 1], params: { src: "texture", "dst": "float[]" } });
+        cs_kernels["histogram "] = webCS.createShader(gpu_histogram, { local_size: [8, 8, 1], groups: [X / 8, Y / 8, 1], params: { src: "texture", "dst": "float[]" } });
       }
       let texSrc = $("#image000")[0];
       let bufHis = webCS.createBuffer(256 * 4 * 4);
@@ -1193,7 +1294,7 @@ var X = 512, Y = 512;
       }
       console.log(histogram);
       if (cs_kernels["replace"] == null) {
-        cs_kernels["replace"] = webCS.createShader(glsl_replace, {
+        cs_kernels["replace"] = webCS.createShader(gpu_replace, {
           local_size: [8, 8, 1],
           groups: [X / 8, Y / 8, 1],
           params: { src: "texture", "dst": "texture", histo: "float[]" }
@@ -1209,6 +1310,7 @@ var X = 512, Y = 512;
       let myfilter = ui.item.attr("data-filter");
       $(".code.example").hide();
       $("#canvas2GPU").hide();
+      $("#data_div").hide();
       $("#code_" + myfilter).show();
       do_cs["do_" + myfilter](myfilter);
     }
@@ -1232,80 +1334,21 @@ var X = 512, Y = 512;
     $("#examplemenu").menu({ select: doExample });
   })();
   (async function setupExample() {
-    let example_js = {};
-    example_js.smm_naive = `
-        let M = 64, N = 64, K =64;
-        var createArray = function ( n) { 
-            var buf = new Float32Array(n);
-            for(var i = 0; i < n; i++){buf[i] = Math.random();}
-            return buf;
-        };
-        let cpuA = createArray(M*K);
-        let cpuB = createArray(K*N);
-        let cpuC = createArray(M*N);
-        let webCS = await WebCS.create();
-        let cs_smm = webCS.createShader(glsl_smm_naive, {local_size:[8, 8, 1], groups:[M/8, N/8, 1]});
-        await (cs_smm.setUniform('MNK', M, N, K, 0)).run(cpuA, cpuB, cpuC);
-        // or
-        // cs_smm_naive.run(cpuA, cpuB, cpuC, {'MNK':[M,N,K,0]});
-        cs_smm.getData('C', cpuC);
-            `;
-    example_js.texture = `
-        var X = 512, Y = 512, Z = 1;
-        let webCS = await WebCS.create({width:X, height:Y});
-        // or let webCS = new WebCS({canvas:$("#canvas2GPU")[0]});
-        let cs_texture = webCS.createShader(glsl_texture, { local_size:[8, 8, 1], groups:[X/8, Y/8, 1], params:{'dst':'texture'}});
-
-        await cs_texture.run(null);
-
-        let tex = cs_texture.getTexture('dst');
-        webCS.present(tex);
-        $("#display1")[0].appendChild(webCS.canvas);
-        `;
-    example_js.texture2 = `
-        cs_texture().run(null); // to gerenate a texture
-        var X = 512, Y = 512, Z = 1;
-        let webCS = await WebCS.create({width:X, height:Y});
-        // or let webCS = new WebCS({canvas:$("#canvas2GPU")[0]});
-        let cs_texture2 = webCS.createShader(glsl_texture2, { local_size:[8, 8, 1], groups:[X/8, Y/8, 1], params:{src:'texture', 'dst':'texture'}});
-
-        let texSrc = cs_texture.getTexture('dst');
-        await cs_texture2.run(texSrc, null);
-
-        let tex = cs_texture2.getTexture('dst');
-        webCS.present(tex);
-        $("#display1")[0].appendChild(webCS.canvas);
-        `;
-    example_js.img_texture = `
-        var X = 512, Y = 512, Z = 1;
-        let webCS = await WebCS.create({width:X, height:Y});
-        // or let webCS = new WebCS({canvas:$("#canvas2GPU")[0]});
-        let cs_texture2 = webCS.createShader(glsl_texture2, { local_size:[8, 8, 1], groups:[X/8, Y/8, 1], params:{src:'texture', 'dst':'texture'}});
-
-        let texSrc = $('#image000')[0];
-        await cs_texture2.run(texSrc, null);
-
-        let tex = cs_texture2.getTexture('dst');
-        webCS.present(tex);
-        $("#display1")[0].appendChild(webCS.canvas);
-        `;
     let codes_block = $("#codes_block");
     testcases.forEach(function(ele) {
       let code_ele = $(`<code id='code_${ele}' class='code example language-javascript'></code>`);
-      var btf = hljs.highlight("c++", glsl_kernels[ele].toString());
+      var btf = hljs.highlight("c++", gpu_kernels[ele].toString());
       let btf_value = btf.value;
       if (ele == "histogram") {
-        let r2 = hljs.highlight("c++", glsl_replace.toString()).value;
+        let r2 = hljs.highlight("c++", gpu_replace.toString()).value;
         btf_value = btf_value + "\n" + r2;
       }
-      let btf2 = hljs.highlight("javascript", example_js[ele] || do_cs["do_" + ele].toString());
-      let btf2_value = btf2.value.replace("glsl_" + ele, '<span class="hljs-title">glsl_' + ele + "</span>");
-      if (example_js[ele]) {
-        btf2_value = "await (async function(kernel_name) {" + btf2_value + "\n})();";
-      } else {
+      let btf2 = hljs.highlight("javascript", do_cs["do_" + ele].toString());
+      let btf2_value = btf2.value.replace("gpu_" + ele, '<span class="hljs-title">gpu_' + ele + "</span>");
+      {
         btf2_value = "await (" + btf2_value + ")();";
       }
-      code_ele.html('<div class="glsl_code example">' + btf_value + '<br/><br/>        </div><div class="js_code example">' + btf2_value + "</div>");
+      code_ele.html('<div class="gpu_code example">' + btf_value + '<br/><br/>        </div><div class="js_code example">' + btf2_value + "</div>");
       codes_block.append(code_ele);
     });
     $(".code.example").hide();
@@ -1313,20 +1356,20 @@ var X = 512, Y = 512;
   })();
 })();
 $(function() {
-  var editorglsl = CodeMirror.fromTextArea(document.getElementById("practiseglsl"), { lineNumbers: true, mode: "text/x-c++src", matchBrackets: true });
+  var editorgpu = CodeMirror.fromTextArea(document.getElementById("practisegpu"), { lineNumbers: true, mode: "text/x-c++src", matchBrackets: true });
   var editorjs = CodeMirror.fromTextArea(document.getElementById("practisejs"), { lineNumbers: true, mode: "javascript", matchBrackets: true });
   $("#run_practise").button();
   $("#run_practise").click(function() {
-    formatall(editorglsl);
+    formatall(editorgpu);
     formatall(editorjs);
-    let test_str = editorglsl.getValue() + "\n async function mypractice(){" + editorjs.getValue() + "}; mypractice();";
+    let test_str = editorgpu.getValue() + "\n async function mypractice(){" + editorjs.getValue() + "}; mypractice();";
     eval(test_str);
   });
   function formatall(editor) {
-    let oldSize = editorglsl.getScrollInfo();
+    let oldSize = editorgpu.getScrollInfo();
     var totalLines = editor.lineCount();
     editor.autoFormatRange({ line: 0, ch: 0 }, { line: totalLines });
-    editorglsl.setSize(oldSize.width, oldSize.height);
+    editorgpu.setSize(oldSize.width, oldSize.height);
   }
   function setPractice() {
     if ($("#GPUToggleButton").is(":checked")) {
