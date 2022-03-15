@@ -182,7 +182,7 @@ text-overflow:ellipsis; overflow:hidden;
     let App = {};
     var do_cs = {};
     let cs_kernels = {};
-    let wgsl_kernels = {};
+    let glsl_kernels = {};
     let testcases = [
         'sgemm_naive', 'sgemmv1', 'sgemmv2'
     ];
@@ -196,27 +196,25 @@ text-overflow:ellipsis; overflow:hidden;
         let gpuB = null;
         let gpuC = null;
         let gpuD = null;
-        function createWGSL() {
+        function createGLSL() {
         // clang-format off
-        function wgsl_fill(A){
+        function glsl_fill(A){
                 return `
-                    var N:u32 = num_workgroups.x * workgroup_id.x;
+                    uint N = gl_WorkGroupSize.x * gl_NumWorkGroups.x;
                     // Store the result
-                    A[thread.y*N + thread.x] = f32(thread.y*N + thread.x) / f32(thread.y*N + thread.x + N);
+                    A[thread.y*N + thread.x] = float(thread.y*N + thread.x) / float(thread.y*N + thread.x + N);
                 `;
             }
 
-        function wgsl_sgemm_naive(A,B,C,D){
+        function glsl_sgemm_naive(A,B,C,D){
                 return `
                     // C[M, N] = A[M, K] * B[K, N]
-                    var M:u32 = this.uniform.MNK.x;
-                    var N:u32 = this.uniform.MNK.y;
-                    var K:u32 = this.uniform.MNK.z;
+                    uint M = this.uniform.MNK.x, N = this.uniform.MNK.y, K = this.uniform.MNK.z;
                     // Compute a single element C[thread.y, thread.x] by looping over k
-                    var sum:f32 = 0.0;
-                    for (var k:u32 = 0u; k < K; k = k + 1u)
+                    float sum = 0.0;
+                    for (uint k = 0u; k < K; k++)
                     {
-                        sum = sum + A[thread.y * K + k] * B[k * N + thread.x];
+                        sum += A[thread.y * K + k] * B[k * N + thread.x];
                     }
              
                     // Store the result
@@ -224,140 +222,136 @@ text-overflow:ellipsis; overflow:hidden;
                 `;
             }
 
-        function wgsl_sgemmv1(A,B,C,D){
+        function glsl_sgemmv1(A,B,C,D){
                 return `
                     // C[M, N] = A[M, K] * B[K, N]
-                    var M:u32 = this.uniform.MNK.x;
-                    var N:u32 = this.uniform.MNK.y;
-                    var K:u32 = this.uniform.MNK.z;
-                    var sum:f32 = 0.0;
-                    var<workgroup> SA :array<array<f32, LOCAL_SIZE_X>, LOCAL_SIZE_Y >;
-                    var<workgroup> SB :array<array<f32, LOCAL_SIZE_Y>, LOCAL_SIZE_X >;
+                    uint M = this.uniform.MNK.x, N = this.uniform.MNK.y, K = this.uniform.MNK.z;
+                    shared float SA[LOCAL_SIZE_Y][LOCAL_SIZE_X];
+                    shared float SB[LOCAL_SIZE_X][LOCAL_SIZE_Y];
+                    float sum = 0.0;
                     // Compute a single element C[thread.y, thread.x] by looping over tiles
-                    var nTiles:u32 = K / LOCAL_SIZE_X;
-                    var localx:u32 = localthread.x;
-                    var localy:u32 = localthread.y;
-                    for (var i:u32 = 0u; i < nTiles; i = i + 1u){
+                    uint nTiles = K / LOCAL_SIZE_X;
+                    uint localx = gl_LocalInvocationID.x;
+                    uint localy = gl_LocalInvocationID.y;
+                    for (uint i = 0u; i < nTiles; i++){
                         SA[localy][localx] = A[thread.y*K + i*LOCAL_SIZE_X + localx];
                         SB[localy][localx] = B[(localy + i*LOCAL_SIZE_Y) * N + thread.x];
-                        storageBarrier();
-                        workgroupBarrier();
+                        memoryBarrierShared();
+                        barrier();
 
-                        for (var k:u32 = 0u; k < LOCAL_SIZE_X; k=k+1u)
+                        for (uint k = 0u; k < LOCAL_SIZE_X; k++)
                         {
-                            sum = sum +  SA[localy][k] * SB[k][localx];
+                            sum += SA[localy][k] * SB[k][localx];
                         }
-                        workgroupBarrier();
+                        barrier();
                     }
              
                     // Store the result
                     D[thread.y*N + thread.x] = C[thread.y*N + thread.x] + sum;
                 `;
             }
-        function wgsl_sgemmv2(A,B,C,D){
-                const batchX = 32;
+        function glsl_sgemmv2(A,B,C,D){
+                const batchX = 64;
                 return `
+                    shared float SB[LOCAL_SIZE_Y][${batchX}u*LOCAL_SIZE_X];
                     // C[M, N] = A[M, K] * B[K, N]
-                    var M:u32 = this.uniform.MNK.x;
-                    var N:u32 = this.uniform.MNK.y;
-                    var K:u32 = this.uniform.MNK.z;
-                    const BATCHN:u32 = ${batchX}u;
-                    const LOCAL_SIZE_X_BATCH:u32 = BATCHN * LOCAL_SIZE_X;
-                    let TS:u32 = LOCAL_SIZE_Y;
-                    var sum:array<f32, BATCHN>;
-                    var RA:array<f32,BATCHN>;
-                    var<workgroup> SB :array<array<f32, 32u>, LOCAL_SIZE_Y >;
+                    uint M = this.uniform.MNK.x, N = this.uniform.MNK.y, K = this.uniform.MNK.z;
+                    const uint BATCHN = ${batchX}u;
+                    const uint TS = LOCAL_SIZE_Y;
+                    float sum[BATCHN];
+                    float RA[BATCHN];
                     // Compute a single element C[thread.y, thread.x] by looping over tiles
-                    var nTiles:u32 = K / (BATCHN*LOCAL_SIZE_X);
-                    var localx:u32 = localthread.x;
-                    var localy:u32 = localthread.y;
-                    for (var i:u32 = 0u; i < nTiles; i = i + 1u){
-                        for(var bi:u32 = 0u; bi < BATCHN; bi = bi + 1u){
+                    uint nTiles = K / (BATCHN*LOCAL_SIZE_X);
+                    uint localBX = gl_LocalInvocationID.x;
+                    uint localx = gl_LocalInvocationID.x;
+                    uint localy = gl_LocalInvocationID.y;
+                    for (uint i = 0u; i < nTiles; i++){
+                        for(uint bi = 0u; bi < BATCHN; bi++){
                             SB[localy][localx*BATCHN +bi] = B[(localy + i*LOCAL_SIZE_Y) * N + thread.x*BATCHN + bi];
                         }
-                        for(var ti:u32 = 0u; ti < TS; ti = ti + 1u){
+                        for(uint ti = 0u; ti < TS; ti++){
                             RA[ti] = A[thread.y*K + i*TS + ti];
                         }
-                        storageBarrier();
-                        workgroupBarrier();
+                        memoryBarrierShared();
+                        barrier();
 
-                        for(var bi:u32 = 0u; bi < BATCHN; bi = bi + 1u){
-                            for (var k:u32 = 0u; k < TS; k = k + 1u)
+                        for(uint bi = 0u; bi < BATCHN; bi++){
+                            for (uint k = 0u; k < TS; k++)
                             {
-                                sum[bi] = sum[bi] + RA[k] * SB[k][bi];
+                                sum[bi] += RA[k] * SB[k][bi];
                             }
                         }
-                        workgroupBarrier();
+                        barrier();
                     }
              
                     // Store the result
-                    for(var bi:u32 = 0u; bi < BATCHN; bi = bi + 1u){
+                    for(uint bi = 0u; bi < BATCHN; bi++){
                         D[thread.y*N + thread.x*BATCHN + bi] = C[thread.y*N + thread.x*BATCHN + bi] + sum[bi];
                     }
                 `;
             }
 
             // clang-format on
-            wgsl_kernels.sgemm_naive = wgsl_sgemm_naive;
-            wgsl_kernels.sgemmv1 = wgsl_sgemmv1;
-            wgsl_kernels.sgemmv2 = wgsl_sgemmv2;
-            wgsl_kernels.fill = wgsl_fill;
+            glsl_kernels.sgemm_naive = glsl_sgemm_naive;
+            glsl_kernels.sgemmv1 = glsl_sgemmv1;
+            glsl_kernels.sgemmv2 = glsl_sgemmv2;
+            glsl_kernels.fill = glsl_fill;
         }
         function createCS(){
        
-        do_cs.do_sgemm_general = async function (kernel_name){
+        do_cs.do_sgemm_general = function (kernel_name){
             var M = X, N = Y, K = X;
             let dimentions = {"sgemmv2":{ local_size:[1, 64, 1], groups:[M/64, N/64, 1]}};
             // create buffer on gpu
-            await initGpuBuffer();
+            initGpuBuffer();
             // create the gpu kernel 
             if(cs_kernels[kernel_name] == null){
-                let thesource = wgsl_kernels[kernel_name] || wgsl_sgemm_naive;
+                let thesource = glsl_kernels[kernel_name] || glsl_sgemm_naive;
                 let thedimention = dimentions[kernel_name] || { local_size:[8, 8, 1], groups:[M/8, N/8, 1]}
                 cs_kernels[kernel_name] = webCS.createShader(thesource, thedimention);
             }
             let the_sgemm_kernel = cs_kernels[kernel_name];
 
             // dispatch the gpu kernel
-            let t = await getTime(async ()=>{
+            let t = getTime( ()=>{
                // the parameter can be js typed array. 
                // the_sgemm_kernel.setUniform('MNK', M, N, K, 0).run(cpuA, cpuB, cpuC, null);
                // pass the gpu buffer as parameter
-               await the_sgemm_kernel.run(gpuA, gpuB, gpuC, gpuD, {'MNK':[M,N,K,0]});
+               the_sgemm_kernel.run(gpuA, gpuB, gpuC, gpuD, {'MNK':[M,N,K,0]});
             });
             // verify the result
             if(true){
                 let x = Math.floor(N*Math.random()),  y = Math.floor(N*Math.random());
                 let acc = cpuC[y*N+x];
                 for(let k=0; k<K; k++) acc += cpuA[y*K + k] * cpuB[k*N + x]
-                cpuD = await the_sgemm_kernel.getData('D', cpuD);
+                the_sgemm_kernel.getData('D', cpuD);
                 let result = cpuD[y*N+x];
                 let diff = result - acc;
                 result = result.toFixed(7);
                 diff = diff.toFixed(7);
                 App.showMessage(`Dgpu[${y},${x}] = ${result}; \u2003<br/> Dgpu[${y},${x}] - Dcpu[${y},${x}] : ${diff}`);
             }
-            async function initGpuBuffer(){
+            function initGpuBuffer(){
                 if(gpuA == null){
                     gpuA = gpuA || webCS.createBuffer(M*K*4);
                     gpuB = gpuB || webCS.createBuffer(K*K*4);
                     gpuC = gpuC || webCS.createBuffer(M*N*4);
                     gpuD = gpuD || webCS.createBuffer(M*N*4);
-                    await do_cs.fill(gpuA);
-                    await do_cs.fill(gpuB);
-                    await do_cs.fill(gpuC);
-                    await do_cs.fill(gpuD);
-                    cpuA = await webCS.getData(gpuA, 'float');
-                    cpuB = await webCS.getData(gpuB, 'float');
-                    cpuC = await webCS.getData(gpuC, 'float');
-                    cpuD = await webCS.getData(gpuD, 'float');
+                    do_cs.fill(gpuA);
+                    do_cs.fill(gpuB);
+                    do_cs.fill(gpuC);
+                    do_cs.fill(gpuD);
+                    cpuA = webCS.getData(gpuA, 'float');
+                    cpuB = webCS.getData(gpuB, 'float');
+                    cpuC = webCS.getData(gpuC, 'float');
+                    cpuD = webCS.getData(gpuD, 'float');
                 }
             }
 
-            async function getTime(f){
+            function getTime(f){
                 const t0 = performance.now();
                 {
-                    await f();
+                    f();
                 }
                 const t1 = performance.now();
                 let t = t1 - t0;
@@ -384,17 +378,18 @@ text-overflow:ellipsis; overflow:hidden;
             $(themenu).append(ula.children().detach());
         }
         doone(testcases, '#example_menus');
-        async function doExampleGPU(e, ui) {
+        function doExampleGPU(e, ui) {
             let myfilter = ui.item.attr('data-filter');
             $(".code.example").hide();
             $("#canvas2GPU").hide();
             $("#code_"+myfilter).show();
             do_cs["do_" + myfilter](myfilter);
         }
-        async function doExample(e, ui) {
+        function doExample(e, ui) {
             let myfilter = ui.item.attr('data-filter');
             if(webCS == null){
-                webCS = await WebCS.create({ canvas: $("#canvas2GPU")[0] });
+                webCS = new WebCS({canvas:$("#canvas2GPU")[0]});
+                //webCS = new WebCS();
             }
             if(myfilter == null){
                 return;
@@ -414,16 +409,16 @@ text-overflow:ellipsis; overflow:hidden;
         let codes_block = $('#codes_block');
         testcases.forEach(function(ele) {
             let code_ele = $(`<code id='code_${ele}' class='code example language-javascript'></code>`)
-            let btf = hljs.highlight('c++', wgsl_kernels[ele].toString());
+            let btf = hljs.highlight('c++', glsl_kernels[ele].toString());
             let btf2 = hljs.highlight('javascript', do_cs['do_'+ele].toString());
-            code_ele.html( btf.value + '<br/><br/>        '+ btf2.value.replace('wgsl_'+ele, '<span class="hljs-title">wgsl_'+ ele +'</span>'));
+            code_ele.html( btf.value + '<br/><br/>        '+ btf2.value.replace('glsl_'+ele, '<span class="hljs-title">glsl_'+ ele +'</span>'));
             codes_block.append(code_ele);
         });
         $(".code.example").hide();
         $("#code_sgemm_naive").show();
     };
         
-    async function InitApp(){
+    function InitApp(){
         var M = X, N = Y, K = X;
         var createArray= function ( n) { 
             return new Float32Array(Array.from({length:n}, ()=>Math.random()));
@@ -432,13 +427,11 @@ text-overflow:ellipsis; overflow:hidden;
         //cpuB = cpuB || createArray(K*N);
         //cpuC = cpuC || createArray(M*N);
         //cpuD = cpuD || createArray(M*N);
-        if(webCS == null){
-            webCS = await WebCS.create({ canvas: $("#canvas2GPU")[0] });
-        }
+        webCS = webCS || new WebCS({canvas:$("#canvas2GPU")[0]});
 
         do_cs.fill = function(gpuBuffer){
             if(cs_kernels['fill'] == null){
-                let thesource =  wgsl_kernels.fill;
+                let thesource =  glsl_kernels.fill;
                 cs_kernels['fill'] = webCS.createShader(thesource, { local_size:[8, 8, 1], groups:[M/8, N/8, 1]});
             }
             cs_kernels['fill'].run(gpuBuffer);
@@ -447,17 +440,17 @@ text-overflow:ellipsis; overflow:hidden;
         gpuB = gpuB || webCS.createBuffer(K*K*4);
         gpuC = gpuC || webCS.createBuffer(M*N*4);
         gpuD = gpuD || webCS.createBuffer(M*N*4);
-        await do_cs.fill(gpuA);
-        await do_cs.fill(gpuB);
-        await do_cs.fill(gpuC);
-        await do_cs.fill(gpuD);
-        cpuA = await webCS.getData(gpuA, 'float');
-        cpuB = await webCS.getData(gpuB, 'float');
-        cpuC = await webCS.getData(gpuC, 'float');
-        cpuD = await webCS.getData(gpuD, 'float');
+        do_cs.fill(gpuA);
+        do_cs.fill(gpuB);
+        do_cs.fill(gpuC);
+        do_cs.fill(gpuD);
+        cpuA = webCS.getData(gpuA, 'float');
+        cpuB = webCS.getData(gpuB, 'float');
+        cpuC = webCS.getData(gpuC, 'float');
+        cpuD = webCS.getData(gpuD, 'float');
     };
 
-    createWGSL();
+    createGLSL();
     createCS();
     InitApp();
     appendmenu();

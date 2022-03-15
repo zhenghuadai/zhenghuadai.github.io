@@ -11,8 +11,8 @@
 <script src="js/codemirror/format.js"></script>
 
 
-  <script type="module" crossorigin src="/assets/index.aef0a006.js"></script>
-  <link rel="stylesheet" href="/assets/index.e5708099.css">
+  <script type="module" crossorigin src="/assets/index.25dd8656.js"></script>
+  <link rel="stylesheet" href="/assets/index.9736f275.css">
 </head>
 <body>
 
@@ -99,8 +99,8 @@
 
 		<div id='practice_div'>
             <br/>
-            <div>GLSL:</div>
-			<textarea id="practiseglsl" style="display: none;">
+            <div>WGSL:</div>
+			<textarea id="practisegpu" style="display: none;">
             function wgsl_invert(src, dst){
                 return `
                    var pos:vec2<u32> = vec2<u32>(thread.xy);
@@ -142,6 +142,11 @@ $(webCS.canvas).show();
 
         <div id='canvas_div'>
           <canvas id='canvas2GPU' class='canvas display1' title0='GPU Canvas' width=512 height=512></canvas>
+        </div>
+        <div id='data_div' style='display:none'>
+            <div id='data0_div'></div>
+            <div id='data1_div'></div>
+            <div id='data2_div'></div>
         </div>
     </div>
     <div id='display0' style='display:none'>
