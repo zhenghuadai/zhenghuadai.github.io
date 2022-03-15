@@ -208,7 +208,7 @@ text-overflow:ellipsis; overflow:hidden;
 
         function wgsl_sgemm_naive(A,B,C,D){
                 return `
-                    // C[M, N] = A[M, K] * B[K, N]
+                    // D[M, N] = A[M, K] * B[K, N] + C[M, N]
                     var M:u32 = this.uniform.MNK.x;
                     var N:u32 = this.uniform.MNK.y;
                     var K:u32 = this.uniform.MNK.z;
@@ -226,11 +226,12 @@ text-overflow:ellipsis; overflow:hidden;
 
         function wgsl_sgemmv1(A,B,C,D){
                 return `
-                    // C[M, N] = A[M, K] * B[K, N]
+                    // D[M, N] = A[M, K] * B[K, N] + C[M, N]
                     var M:u32 = this.uniform.MNK.x;
                     var N:u32 = this.uniform.MNK.y;
                     var K:u32 = this.uniform.MNK.z;
                     var sum:f32 = 0.0;
+                    // var<workgroup> is shared in glsl 
                     var<workgroup> SA :array<array<f32, LOCAL_SIZE_X>, LOCAL_SIZE_Y >;
                     var<workgroup> SB :array<array<f32, LOCAL_SIZE_Y>, LOCAL_SIZE_X >;
                     // Compute a single element C[thread.y, thread.x] by looping over tiles
@@ -257,7 +258,7 @@ text-overflow:ellipsis; overflow:hidden;
         function wgsl_sgemmv2(A,B,C,D){
                 const batchX = 32;
                 return `
-                    // C[M, N] = A[M, K] * B[K, N]
+                    // D[M, N] = A[M, K] * B[K, N] + C[M, N]
                     var M:u32 = this.uniform.MNK.x;
                     var N:u32 = this.uniform.MNK.y;
                     var K:u32 = this.uniform.MNK.z;
