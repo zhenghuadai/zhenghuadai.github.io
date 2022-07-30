@@ -17807,8 +17807,8 @@ if (typeof self !== 'undefined') {
 }
 
 function bindTo(target) {
-  if (target.GPU) return;
-  Object.defineProperty(target, 'GPU', {
+  if (target.GPUJS) return;
+  Object.defineProperty(target, 'GPUJS', {
     get() {
       return GPU;
     }

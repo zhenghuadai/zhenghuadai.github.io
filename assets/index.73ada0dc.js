@@ -43,7 +43,6 @@ p();
 var jqueryUi_min = "";
 var highlight_min = "";
 var codemirror = "";
-var index_html_htmlProxy_index_0 = "";
 $("#image000").on("load", function() {
   refresh();
 });
@@ -154,7 +153,7 @@ class CSKernel {
       console.log(this.uniformBindGroup);
       passEncoder.setBindGroup(1, this.uniformBindGroup);
     }
-    passEncoder.dispatch(this.groups[0], this.groups[1], this.groups[2]);
+    passEncoder.dispatchWorkgroups(this.groups[0], this.groups[1], this.groups[2]);
     passEncoder.end();
     const gpuCommands = this.commandEncoder.finish();
     this.webCS.gpuDevice.queue.submit([gpuCommands]);
@@ -711,16 +710,16 @@ class WebCS {
         ${layout_str} 
         ${unform_str}
         ${global_str}
-        let LOCAL_SIZE_X:u32 = ${local_size[0]}u;
-        let LOCAL_SIZE_Y:u32 = ${local_size[1]}u;
-        let LOCAL_SIZE_Z:u32 = ${local_size[2]}u;
+        const LOCAL_SIZE_X:u32 = ${local_size[0]}u;
+        const LOCAL_SIZE_Y:u32 = ${local_size[1]}u;
+        const LOCAL_SIZE_Z:u32 = ${local_size[2]}u;
         var<private> num_workgroups:vec3<u32>;
         var<private> workgroup_id:vec3<u32>;
         ${global_func_str}
         fn csmain(thread: vec3<u32>, localthread:vec3<u32>, workgroup_id:vec3<u32>){
             ${csmain_nocomments}
         }
-        @stage(compute) @workgroup_size(${local_size[0]}, ${local_size[1]}, ${local_size[2]})
+        @compute @workgroup_size(${local_size[0]}, ${local_size[1]}, ${local_size[2]})
 
         fn main(@builtin(global_invocation_id) thread: vec3<u32>, @builtin(local_invocation_id) localthread: vec3<u32>, @builtin(workgroup_id) block: vec3<u32>, @builtin(num_workgroups) wgs:vec3<u32>) {
             num_workgroups = wgs;
@@ -799,11 +798,11 @@ class WebCS {
         @group(0) @binding(1) var mTexture : texture_2d<f32>;
 
         struct VertexOutput {
-            @builtin(position) Position : vec4<f32>;
-            @location(0) fragUV : vec2<f32>;
+            @builtin(position) Position : vec4<f32>,
+            @location(0) fragUV : vec2<f32>
         };
 
-        @stage(vertex)
+        @vertex
         fn vert_main(@builtin(vertex_index) VertexIndex : u32) -> VertexOutput {
             var pos = array<vec2<f32>, 4>(
                 vec2<f32>( 1.0,  1.0),
@@ -823,7 +822,7 @@ class WebCS {
             return output;
         }
 
-        @stage(fragment)
+        @fragment
         fn frag_main(@location(0) fragUV : vec2<f32>) -> @location(0) vec4<f32> {
             var color:vec4<f32> = textureSample(mTexture, mSampler, fragUV);
             return color;
@@ -920,7 +919,7 @@ class WebCS {
       if (dstarray2 == void 0) {
         hostAccessArrary2 = new Uint8Array(arrayBuffer2);
       } else if (typeof dstarray2 === "string") {
-        const typemap = /* @__PURE__ */ new Map([
+        const typemap = new Map([
           ["int8", Int8Array],
           ["uint8", Uint8Array],
           ["uint8clamped", Uint8ClampedArray],
