@@ -453,6 +453,73 @@ div.CodeMirror-dragcursors {
 /* Help users use markselection to safely style text background */
 span.CodeMirror-selectedtext { background: none; }
 
+.ui-menu { width: 150px; }
+#menus .top-menu {
+    display:inline;
+    float:left;
+}
+#menus .top-menu-right {
+    display:inline;
+    float:right;
+}
+#display0{
+    margin-top:40px;
+    display:block;
+    position:absolute;
+}
+#image000{
+    margin:0;
+}
+#messagebox{
+    background: gray;
+    color:white;
+}
+.stdsize{
+    width:640px;
+    height:480px;
+    display:inline;
+}
+.cssize{
+    width:512px;
+    height:512px;
+    display:inline;
+}
+.fullsize{
+    width:100%;
+    height:100%;
+}
+#display1{
+    margin:80 40 0 0;
+    padding:0 80 0 0;
+    display:block;
+    position:absolute;
+    background: black;
+    color:white;
+}
+.code{
+    background: black;
+    color:white;
+}
+xmp.code{
+    margin:10 40 0 40;
+    background: white;
+    color:blue;
+}
+.minimize{
+width:10;
+height:10;
+text-overflow:ellipsis; overflow:hidden; 
+}
+div.gpu_code.example{
+    margin:0 0 0 60;
+}
+div.js_code.example{
+    margin:0 0 0 60;
+}
+#data_div{
+    background: white;
+}
+
 .matrix {
 	position: relative;
 }

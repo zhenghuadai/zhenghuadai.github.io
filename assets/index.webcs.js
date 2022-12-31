@@ -43,6 +43,8 @@ p();
 var jqueryUi_min = "";
 var highlight_min = "";
 var codemirror = "";
+var index_html_htmlProxy_index_0 = "";
+var matrix = "";
 $("#image000").on("load", function() {
   refresh();
 });
@@ -530,7 +532,7 @@ class WebCS {
         while (func_si > 0) {
           if (isWhite(csmain_nocomments[func_si + 5])) {
             let funcEndI = csmain_nocomments.indexOf(";", func_si + 5) + 1;
-            let myvar = "let " + csmain_nocomments.substring(func_si + 5, funcEndI);
+            let myvar = "const " + csmain_nocomments.substring(func_si + 5, funcEndI);
             global_func_str = global_func_str + "\n" + myvar;
             csmain_nocomments = csmain_nocomments.substring(0, func_si) + csmain_nocomments.substring(funcEndI);
             func_si = csmain_nocomments.indexOf("const");
@@ -919,7 +921,7 @@ class WebCS {
       if (dstarray2 == void 0) {
         hostAccessArrary2 = new Uint8Array(arrayBuffer2);
       } else if (typeof dstarray2 === "string") {
-        const typemap = new Map([
+        const typemap = /* @__PURE__ */ new Map([
           ["int8", Int8Array],
           ["uint8", Uint8Array],
           ["uint8clamped", Uint8ClampedArray],
@@ -1070,7 +1072,6 @@ function displayMatrix(matrix2, name, el, rows, cols, idxBase) {
             `;
   el.innerHTML = matrixHtml;
 }
-var matrix = "";
 let webCS = null;
 let cs_smm_naive = null;
 let cs_texture = null;
@@ -1079,7 +1080,7 @@ let gpu_kernels = {};
 let do_cs = {};
 var X = 512, Y = 512;
 (function() {
-  let testcases = ["smm_naive", "texture", "texture2", "img_texture", "img_dwt", "histogram"];
+  let testcases = ["smm_naive", "texture", "texture2", "img_texture", "img_dwt", "histogram", "filter"];
   function gpu_smm_naive(A, B, C) {
     return `
                // C[M, N] = A[M, K] * B[K, N]
@@ -1164,23 +1165,31 @@ var X = 512, Y = 512;
         dst[thread.xy] = new_pixel;
         `;
   }
+  function gpu_filter(src, dst) {
+    return `
+    const kernel = mat3x3f(
+        1.0,1.0,1.0,
+        0.0,0.0,0.0,
+        -1.0,-1.0,-1.0);
+    var pos:vec2<u32> = vec2<u32>(thread.xy);
+    var sum:vec4<f32> = vec4<f32>(0.0,0.0,0.0,1.0);
+    for(var j:u32=0; j<3; j++){
+        for(var i:u32=0; i<3; i++){
+            let pixel = src[pos.y + j -1][pos.x + i -1];
+            sum = sum + pixel * kernel[j][i];
+        }
+    }
+    dst[pos.y][pos.x] = sum;     
+    `;
+  }
   gpu_kernels.smm_naive = gpu_smm_naive;
   gpu_kernels.texture = gpu_texture;
   gpu_kernels.texture2 = gpu_texture2;
   gpu_kernels.img_texture = gpu_texture2;
   gpu_kernels.img_dwt = gpu_img_dwt;
   gpu_kernels.histogram = gpu_histogram;
+  gpu_kernels.filter = gpu_filter;
   (function() {
-    (function appendmenu() {
-      function doone(thefilters, themenu) {
-        let ula = $("<ul/>");
-        thefilters.forEach(function(ele) {
-          ula.append("<li data-filter='" + ele + "'><div>" + ele + "</div></li>");
-        });
-        $(themenu).append(ula.children().detach());
-      }
-      doone(testcases, "#example_menus");
-    })();
     do_cs.do_smm_naive = async function(kernel_name) {
       var M = 64, N = 64, K = 64;
       var createArray = function(n) {
@@ -1269,6 +1278,28 @@ var X = 512, Y = 512;
       $("#display1")[0].appendChild(webCS.canvas);
       $("#canvas2GPU").show();
     };
+    do_cs.do_filter = async function(kernel_name) {
+      {
+        cs_kernels["filter"] = webCS.createShader(gpu_filter, { local_size: [8, 8, 1], groups: [X / 8, Y / 8, 1], params: { src: "texture", "dst": "texture" } });
+      }
+      let texSrc = $("#image000")[0];
+      await cs_kernels["filter"].run(texSrc, null);
+      let tex = cs_kernels["filter"].getTexture("dst");
+      webCS.present(tex);
+      $("#display1")[0].appendChild(webCS.canvas);
+      $("#canvas2GPU").show();
+    };
+    do_cs.do_general = async function(kernel_name) {
+      if (cs_kernels["texture2"] == null) {
+        cs_kernels["texture2"] = webCS.createShader(gpu_kernels[kernel_name], { local_size: [8, 8, 1], groups: [X / 8, Y / 8, 1], params: { src: "texture", "dst": "texture" } });
+      }
+      let texSrc = $("#image000")[0];
+      await cs_kernels["texture2"].run(texSrc, null);
+      let tex = cs_kernels["texture2"].getTexture("dst");
+      webCS.present(tex);
+      $("#display1")[0].appendChild(webCS.canvas);
+      $("#canvas2GPU").show();
+    };
     do_cs.do_histogram = async function(kernel_name) {
       if (cs_kernels["histogram "] == null) {
         cs_kernels["histogram "] = webCS.createShader(gpu_histogram, { local_size: [8, 8, 1], groups: [X / 8, Y / 8, 1], params: { src: "texture", "dst": "float[]" } });
@@ -1311,7 +1342,11 @@ var X = 512, Y = 512;
       $("#canvas2GPU").hide();
       $("#data_div").hide();
       $("#code_" + myfilter).show();
-      do_cs["do_" + myfilter](myfilter);
+      if ("do_" + myfilter in do_cs) {
+        do_cs["do_" + myfilter](myfilter);
+      } else {
+        do_cs["do_general"](myfilter);
+      }
     }
     async function doExample(e, ui) {
       let myfilter = ui.item.attr("data-filter");
@@ -1330,6 +1365,17 @@ var X = 512, Y = 512;
       $("#practice_div").hide();
       $("#code_div").show();
     }
+    (function appendmenu() {
+      function doone(thefilters, themenu) {
+        let ula = $("<ul/>");
+        thefilters.forEach(function(ele) {
+          ula.append("<li data-filter='" + ele + "'><div>" + ele + "</div></li>");
+        });
+        $(themenu).append(ula.children().detach());
+      }
+      doone(testcases, "#example_menus");
+      doone(testcases, "#loadexample_menus");
+    })();
     $("#examplemenu").menu({ select: doExample });
   })();
   (async function setupExample() {
@@ -1342,7 +1388,7 @@ var X = 512, Y = 512;
         let r2 = hljs.highlight("c++", gpu_replace.toString()).value;
         btf_value = btf_value + "\n" + r2;
       }
-      let btf2 = hljs.highlight("javascript", do_cs["do_" + ele].toString());
+      let btf2 = hljs.highlight("javascript", ("do_" + ele in do_cs ? do_cs["do_" + ele] : do_cs["do_general"]).toString());
       let btf2_value = btf2.value.replace("gpu_" + ele, '<span class="hljs-title">gpu_' + ele + "</span>");
       {
         btf2_value = "await (" + btf2_value + ")();";
@@ -1361,7 +1407,7 @@ $(function() {
   $("#run_practise").click(function() {
     formatall(editorgpu);
     formatall(editorjs);
-    let test_str = editorgpu.getValue() + "\n async function mypractice(){" + editorjs.getValue() + "}; mypractice();";
+    let test_str = editorgpu.getValue() + "\n (" + editorjs.getValue() + ')("test")';
     eval(test_str);
   });
   function formatall(editor) {
@@ -1384,4 +1430,19 @@ $(function() {
   }
   setPractice();
   $("#GPUToggleButton").click(setPractice);
+  async function loadExample(e, ui) {
+    let myfilter = ui.item.attr("data-filter");
+    if (myfilter == null) {
+      return;
+    }
+    $("#GPUToggleButton").prop("checked", true);
+    setPractice();
+    if (webCS == null) {
+      webCS = await WebCS.create({ canvas: $("#canvas2GPU")[0] });
+    }
+    let ele = myfilter;
+    editorgpu.setValue(gpu_kernels[ele].toString());
+    editorjs.setValue(("do_" + ele in do_cs ? do_cs["do_" + ele] : do_cs["do_general"]).toString());
+  }
+  $("#loadexamplemenu").menu({ select: loadExample });
 });
