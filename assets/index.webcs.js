@@ -299,7 +299,6 @@ class CSKernel {
           size: bytes,
           usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST
         });
-        gpuBuffer.size = bytes;
         return gpuBuffer;
       };
       var createBuffer = createBuffer2;
@@ -615,7 +614,7 @@ class WebCS {
         let param_type = settings.params[param_name].type;
         if (param_type.dim == 1) {
           let num_type = param_type.type;
-          layout_str = layout_str + ` struct struct_${param_name}{ data: array<${num_type}>;} ;
+          layout_str = layout_str + ` struct struct_${param_name}{ data: array<${num_type}>} ;
 @group(0) @binding(${pi}) var<storage, read_write> ${param_name} : struct_${param_name};
 `;
         } else if (param_type.dim == 2) {
@@ -893,7 +892,6 @@ class WebCS {
       size,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST
     });
-    gpuBuffer.size = size;
     return gpuBuffer;
   }
   createTexture(fmt, w, h) {
@@ -1235,7 +1233,7 @@ var X = 512, Y = 512;
       let tex = cs_texture.getTexture("dst");
       webCS.present(tex);
       $("#display1")[0].appendChild(webCS.canvas);
-      $("#canvas2GPU").show();
+      $(webCS.canvas).show();
     };
     do_cs.do_texture2 = async function(kernel_name) {
       do_cs.do_texture();
@@ -1247,7 +1245,7 @@ var X = 512, Y = 512;
       let tex = cs_kernels["texture2"].getTexture("dst");
       webCS.present(tex);
       $("#display1")[0].appendChild(webCS.canvas);
-      $("#canvas2GPU").show();
+      $(webCS.canvas).show();
     };
     do_cs.do_img_dwt = async function(kernel_name) {
       if (cs_kernels.cs_img_dwt == null) {
@@ -1265,7 +1263,7 @@ var X = 512, Y = 512;
       let tex = cs_kernels.cs_img_dwt.getTexture("dst");
       webCS.present(tex);
       $("#display1")[0].appendChild(webCS.canvas);
-      $("#canvas2GPU").show();
+      $(webCS.canvas).show();
     };
     do_cs.do_img_texture = async function(kernel_name) {
       if (cs_kernels["texture2"] == null) {
@@ -1276,7 +1274,7 @@ var X = 512, Y = 512;
       let tex = cs_kernels["texture2"].getTexture("dst");
       webCS.present(tex);
       $("#display1")[0].appendChild(webCS.canvas);
-      $("#canvas2GPU").show();
+      $(webCS.canvas).show();
     };
     do_cs.do_filter = async function(kernel_name) {
       {
@@ -1287,7 +1285,7 @@ var X = 512, Y = 512;
       let tex = cs_kernels["filter"].getTexture("dst");
       webCS.present(tex);
       $("#display1")[0].appendChild(webCS.canvas);
-      $("#canvas2GPU").show();
+      $(webCS.canvas).show();
     };
     do_cs.do_general = async function(kernel_name) {
       if (cs_kernels["texture2"] == null) {
@@ -1298,7 +1296,7 @@ var X = 512, Y = 512;
       let tex = cs_kernels["texture2"].getTexture("dst");
       webCS.present(tex);
       $("#display1")[0].appendChild(webCS.canvas);
-      $("#canvas2GPU").show();
+      $(webCS.canvas).show();
     };
     do_cs.do_histogram = async function(kernel_name) {
       if (cs_kernels["histogram "] == null) {
