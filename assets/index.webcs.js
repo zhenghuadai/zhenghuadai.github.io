@@ -459,6 +459,7 @@ class WebCS {
     this.SFmt2DataType = {};
     this.SFmt2Fmt = {};
     this.Str2SFmt = {};
+    this.presentSettings = { initialized: false };
   }
   static async create(settings = {}) {
     const adapter = await navigator.gpu.requestAdapter();
@@ -780,21 +781,21 @@ class WebCS {
     this.glsl_functions += func;
   }
   async present(tex) {
-    console.log("present");
     const canvas = this.canvas;
     const context = this.canvas.getContext("webgpu");
-    const presentationFormat = context.getPreferredFormat(this.adapter);
+    const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
     let device = this.gpuDevice;
-    const presentationSize = [
-      canvas.width,
-      canvas.height
-    ];
-    context.configure({
-      device,
-      format: presentationFormat,
-      size: presentationSize
-    });
-    const fullscreenTexturedQuadWGSL = `
+    if (this.presentSettings.initialized == false) {
+      const presentationSize = [
+        canvas.width,
+        canvas.height
+      ];
+      context.configure({
+        device,
+        format: presentationFormat,
+        size: presentationSize
+      });
+      const fullscreenTexturedQuadWGSL = `
         @group(0) @binding(0) var mSampler : sampler;
         @group(0) @binding(1) var mTexture : texture_2d<f32>;
 
@@ -829,38 +830,53 @@ class WebCS {
             return color;
         }
         `;
-    const fullscreenQuadPipeline = device.createRenderPipeline({
-      vertex: {
-        module: device.createShaderModule({
-          code: fullscreenTexturedQuadWGSL
-        }),
-        entryPoint: "vert_main"
-      },
-      fragment: {
-        module: device.createShaderModule({
-          code: fullscreenTexturedQuadWGSL
-        }),
-        entryPoint: "frag_main",
-        targets: [
-          {
-            format: presentationFormat
-          }
+      const bindGroupLayout = device.createBindGroupLayout({
+        entries: [
+          { binding: 0, visibility: GPUShaderStage.FRAGMENT, sampler: {} },
+          { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: {} }
         ]
-      },
-      primitive: {
-        topology: "triangle-strip"
-      }
-    });
-    const sampler = device.createSampler({
-      magFilter: "linear",
-      minFilter: "linear"
-    });
+      });
+      const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] });
+      const fullscreenQuadPipeline = device.createRenderPipeline({
+        layout: pipelineLayout,
+        vertex: {
+          module: device.createShaderModule({
+            code: fullscreenTexturedQuadWGSL
+          }),
+          entryPoint: "vert_main"
+        },
+        fragment: {
+          module: device.createShaderModule({
+            code: fullscreenTexturedQuadWGSL
+          }),
+          entryPoint: "frag_main",
+          targets: [
+            {
+              format: presentationFormat
+            }
+          ]
+        },
+        primitive: {
+          topology: "triangle-strip"
+        }
+      });
+      const sampler = device.createSampler({
+        magFilter: "linear",
+        minFilter: "linear"
+      });
+      this.presentSettings.sampler = sampler;
+      this.presentSettings.fullscreenQuadPipeline = fullscreenQuadPipeline;
+      this.presentSettings.initialized = true;
+    }
+    let commandEncoder = device.createCommandEncoder();
+    let _sampler = this.presentSettings.sampler;
+    let _fullscreenQuadPipeline = this.presentSettings.fullscreenQuadPipeline;
     const renderBindGroup = device.createBindGroup({
-      layout: fullscreenQuadPipeline.getBindGroupLayout(0),
+      layout: _fullscreenQuadPipeline.getBindGroupLayout(0),
       entries: [
         {
           binding: 0,
-          resource: sampler
+          resource: _sampler
         },
         {
           binding: 1,
@@ -868,7 +884,6 @@ class WebCS {
         }
       ]
     });
-    let commandEncoder = device.createCommandEncoder();
     const passEncoder = commandEncoder.beginRenderPass({
       colorAttachments: [
         {
@@ -879,7 +894,7 @@ class WebCS {
         }
       ]
     });
-    passEncoder.setPipeline(fullscreenQuadPipeline);
+    passEncoder.setPipeline(_fullscreenQuadPipeline);
     passEncoder.setBindGroup(0, renderBindGroup);
     passEncoder.draw(4, 1, 0, 0);
     passEncoder.end();

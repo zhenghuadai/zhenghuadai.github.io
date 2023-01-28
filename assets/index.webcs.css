@@ -519,6 +519,25 @@ div.js_code.example{
 #data_div{
     background: white;
 }
+.blacka{
+    color: white;
+}
+.blacka:link{
+    color: blue;
+	background-color: transparent;
+	text-decoration: underline;
+}
+.blacka:hover {
+  color: red;
+  background-color: transparent;
+  text-decoration: underline;
+}
+
+.blacka:active {
+  color: yellow;
+  background-color: transparent;
+  text-decoration: underline;
+}
 
 .matrix {
 	position: relative;
