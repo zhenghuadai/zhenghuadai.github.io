@@ -1,0 +1,259 @@
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+
+<HTML>
+    <HEAD>
+        <TITLE> book1.index.html </TITLE>
+        <META NAME="Generator" CONTENT="vim">
+        <META NAME="Author" CONTENT="Zhenghua Dai">
+        <META NAME="Keywords" CONTENT="">
+        <META NAME="Description" CONTENT="">
+<style>
+ul li:nth-child(odd){
+    background-color:#dddddd;
+}
+
+li{
+list-style-type:none;
+}
+</style>
+    </HEAD>
+    <BODY>
+    <div>
+《UEFI原理与编程》
+<ul>
+<li>序
+<li>前　言
+<li><a href='/pdf/viewer.html?file=/books/ch01.pdf' target='_blank'>Chapter 1　Intorduction to UEFI 1</a>
+<li>1.1　Revolution of BIOS 1
+<li>1.1.1　The Function of BIOS  1
+<li>1.1.2　The defect of BIOS  2
+<li>1.2　Glance on UEFI  2
+<li>1.2.1　UEFI System  3
+<li>1.2.2　The Advantage of UEFI  4
+<li>1.2.3　Boot Process of UEFI System 5
+<li>1.3　Summary  12
+<li><br> </li>
+<li><a href='/pdf/viewer.html?file=/books/ch02.pdf' target='_blank'>第2章　UEFI 开发环境搭建  14</a>
+<li>2.1　配置Windows开发环境  14
+<li>2.1.1　安装所需开发工具  15
+<li>2.1.2　配置EDK2开发环境  15
+<li>2.1.3　编译UEFI模拟器和UEFI工程  17
+<li>2.1.4　运行模拟器  19
+<li>2.2　配置Linux 开发环境  21
+<li>2.2.1　安装所需开发工具  22
+<li>2.2.2　配置EDK2开发环境  22
+<li>2.2.3　编译UEFI模拟器和UEFI工程  23
+<li>2.2.4　运行模拟器  24
+<li>2.3　OVMF的制作和使用  25
+<li>2.4　UEFI的启动  27
+<li>2.5　本章小结  28
+<li><br> </li>
+<li><a href='/pdf/viewer.html?file=/books/ch03.pdf' target='_blank'>第3章　UEFI工程模块文件  29</a>
+<li>3.1　标准应用程序工程模块  30
+<li>3.1.1　入口函数  30
+<li>3.1.2　工程文件  31
+<li>3.1.3　编译和运行  37
+<li>3.1.4　标准应用程序的加载过程  37
+<li>3.2　其他类型工程模块  43
+<li>3.2.1　Shell应用程序工程模块  43
+<li>3.2.2　使用main函数的应用程序工程模块  46
+<li>3.2.3　库模块  47
+<li>3.2.4　UEFI驱动模块  49
+<li>3.2.5　模块工程文件小结  50
+<li>3.3　包及.dsc、.dec、.fdf文件  51
+<li>3.3.1　.dsc文件  51
+<li>3.3.2　.dec文件  56
+<li>3.4　调试UEFI  59
+<li>3.5　本章小结  61
+<li><br> </li>
+<li>第4章　UEFI中的Protocol  62
+<li>4.1　Protocol 在UEFI内核中的表示  64
+<li>4.2　如何使用Protocol服务  65
+<li>4.2.1　OpenProtocol服务  66
+<li>4.2.2　HandleProtocol服务  67
+<li>4.2.3　LocateProtocol服务  69
+<li>4.2.4　LocateHandleBuffer服务  69
+<li>4.2.5　其他一些使用Protocol的服务  71
+<li>4.2.6　CloseProtocol服务  72
+<li>4.3　Protocol服务示例  73
+<li>4.4　本章小结  75
+<li><br> </li>
+<li>第5章　UEFI的基础服务  76
+<li>5.1　系统表  76
+<li>5.1.1　系统表的构成  77
+<li>5.1.2　使用系统表  79
+<li>5.2　启动服务  82
+<li>5.2.1　启动服务的构成  82
+<li>5.2.2　启动服务的生存期  91
+<li>5.3　运行时服务  93
+<li>5.4　本章小结  102
+<li><br> </li>
+<li>第6章　事件  103
+<li>6.1　事件函数  104
+<li>6.1.1　等待事件的服务WaitForEvent  105
+<li>6.1.2　生成事件的服务CreateEvent  106
+<li>6.1.3　CreateEventEx服务  110
+<li>6.1.4　事件相关的其他函数  112
+<li>6.2　定时器事件  113
+<li>6.3　任务优先级  114
+<li>6.3.1　提升和恢复任务优先级  115
+<li>6.3.2　UEFI中的时钟中断  116
+<li>6.3.3　UEFI事件Notif?ication函数的派发  126
+<li>6.4　鼠标和键盘事件示例  127
+<li>6.5　本章小结  128
+<li><br> </li>
+<li>第7章　硬盘和文件系统  129
+<li>7.1　GPT硬盘  129
+<li>7.1.1　基于MBR分区的传统硬盘  129
+<li>7.1.2　GPT硬盘详解  130
+<li>7.2　设备路径  134
+<li>7.3　硬盘相关的Protocol  139
+<li>7.3.1　BlockIo解析  140
+<li>7.3.2　BlockIo2解析  142
+<li>7.3.3　DiskIo解析  146
+<li>7.3.4　DiskIo2解析  147
+<li>7.3.5　PassThrough解析  150
+<li>7.4　文件系统  152
+<li>7.5　文件操作  153
+<li>7.5.1　打开文件  154
+<li>7.5.2　读文件  156
+<li>7.5.3　写文件  159
+<li>7.5.4　关闭文件（句柄）  160
+<li>7.5.5　其他文件操作  160
+<li>7.5.6　异步文件操作  162
+<li>7.5.7　EFI_SHELL_PROTOCOL中的文件操作  166
+<li>7.6　本章小结  170
+<li><br> </li>
+<li>第8章　开发UEFI服务  171
+<li>8.1　Protocol服务接口设计  172
+<li>8.2　Protocol服务的实现  174
+<li>8.3　服务型驱动的框架  178
+<li>8.4　ffmpeg的移植与编译  179
+<li>8.4.1　libavcodec的建立和移植  181
+<li>8.4.2　其他库的建立与移植  182
+<li>8.4.3　在驱动型服务中使用StdLib  186
+<li>8.5　使用Protocol服务  188
+<li>8.6　本章小结  190
+<li><br> </li>
+<li>第9章　开发UEFI驱动  191
+<li>9.1　UEFI驱动模型  192
+<li>9.1.1　EFI Driver Binding Protocol的构成  192
+<li>9.1.2　EFI Component Name Protocol的作用和构成   196
+<li>9.2　编写设备驱动的步骤  197
+<li>9.3　PCI设备驱动基础  199
+<li>9.4　AC97控制器芯片的控制接口  202
+<li>9.5　AC97驱动  206
+<li>9.5.1　AC97驱动的驱动服务EFI_AUDIO_PROTOCOL  206
+<li>9.5.2　AC97驱动的框架部分  213
+<li>9.5.3　AC97驱动实验  220
+<li>9.6　本章小结  221
+<li><br> </li>
+<li>第10章　用C++开发UEFI应用  222
+<li>10.1　从编译器角度看C与C++的差异  222
+<li>10.2　在EDK2中支持C++  224
+<li>10.2.1　使EDK2支持C++基本特性  224
+<li>10.2.2　在Windows系统下的程序启动过程  226
+<li>10.2.3　在Windows系统下支持全局构造和析构  229
+<li>10.2.4　在Linux系统下的程序启动过程  231
+<li>10.2.5　在Linux系统下支持全局构造和析构  240
+<li>10.2.6　支持new和delete  242
+<li>10.2.7　支持STL  243
+<li>10.3　GcppPkg概览  243
+<li>10.4　测试GcppPkg  246
+<li>10.5　本章小结  248
+<li><br> </li>
+<li>第11章　GUI基础  249
+<li>11.1　字符串  249
+<li>11.1.1　字符串函数  249
+<li>11.1.2　字符串资源  251
+<li>11.1.3　管理字符串资源  255
+<li>11.2　管理语言  260
+<li>11.3　包列表  262
+<li>11.4　图形界面显示  263
+<li>11.4.1　显示模式  264
+<li>11.4.2　Block Transfer（Blt）传输图像  267
+<li>11.4.3　在图形界面下显示字符串  269
+<li>11.5　用SimpleFont显示中文  272
+<li>11.5.1　 SimpleFont 格式  273
+<li>11.5.2　如何生成字体文件  275
+<li>11.5.3　如何注册字体文件  276
+<li>11.6　开发SimpleFont字库程序  277
+<li>11.7　字体Font  278
+<li>11.7.1　Font的格式  279
+<li>11.7.2　字体包的格式  279
+<li>11.7.3　为什么Font性能高于SimpleFont  281
+<li>11.8　本章小结  284
+<li><br> </li>
+<li>第12章　GUI应用程序  285
+<li>12.1　UEFI事件处理  285
+<li>12.1.1　键盘事件  285
+<li>12.1.2　鼠标事件  292
+<li>12.1.3　定时器事件  293
+<li>12.1.4　UI事件服务类  294
+<li>12.2　事件处理框架  297
+<li>12.3　鼠标与控件的绘制  302
+<li>12.3.1　鼠标的绘制  303
+<li>12.3.2　控件的绘制  305
+<li>12.4　控件系统包GUIPkg  306
+<li>12.5　简单视频播放器的实现  309
+<li>12.6　本章小结  315
+<li><br> </li>
+<li>第13章　深入了解多任务  317
+<li>13.1　多处理器服务  317
+<li>13.1.1　EFI_MP_SERVICES_PROTOCOL功能及用法  317
+<li>13.1.2　启动AP的过程  324
+<li>13.2　内联汇编基础和寄存器上下文的保存与恢复  333
+<li>13.2.1　内联汇编基础  333
+<li>13.2.2　寄存器上下文的保存与恢复  335
+<li>13.3　多线程  336
+<li>13.3.1　生成线程  337
+<li>13.3.2　调度线程  340
+<li>13.3.3　等待线程结束  341
+<li>13.3.4　SimpleThread服务  341
+<li>13.4　本章小结  345
+<li><br> </li>
+<li>第14章　网络应用开发  346
+<li>14.1　在UEFI中使用网络  348
+<li>14.2　使用EFI_TCP4_PROTOCOL  350
+<li>14.2.1　生成Socket对象  352
+<li>14.2.2　连接  356
+<li>14.2.3　传输数据  358
+<li>14.2.4　关闭Socket  361
+<li>14.2.5　测试Socket  362
+<li>14.3　本章小结  363
+<li><br> </li>
+<li>第15章　使用C标准库  364
+<li>15.1　为什么使用C标准库函数  364
+<li>15.2　实现简单的Std函数  365
+<li>15.2.1　简单标准库函数包sstdPkg  366
+<li>15.2.2　使用sstdPkg  368
+<li>15.3　使用EDK2的StdLib  369
+<li>15.3.1　main函数工程  369
+<li>15.3.2　非main函数工程  374
+<li>15.4　本章小结  376
+<li><br> </li>
+<li>第16章　Shell及常用Shell命令  377
+<li>16.1　Shell的编译与执行  377
+<li>16.2　Shell服务  379
+<li>16.3　Shell脚本  385
+<li>16.3.1　Shell脚本语法简介  385
+<li>16.3.2　自动运行指定应用程序  388
+<li>16.4　Shell内置命令  388
+<li>16.4.1　调试设备的相关命令  388
+<li>16.4.2　驱动相关命令  390
+<li>16.4.3　网络相关命令  392
+<li>16.5　本章小结  394
+<li><br> </li>
+<li>附录A　UEFI常用术语及简略语  395
+<li>附录B　RFC 4646常用语言列表  397
+<li>附录C　状态值  398
+<li>附录D　参考资料  400
+</ul>
+<br> 
+<br> 
+
+
+</div>    
+    </BODY>
+</HTML>

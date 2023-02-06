@@ -1,0 +1,32 @@
+if(window.bstr == null){
+var bstr = {
+    "langcode":"eng",
+    "login":"login",
+    "logoff":"logoff",
+    "book":"book",
+    "blog":"blog",
+    "about":"about",
+    "contact":"contact",
+    "signup":"sing up",
+    "bbs":"bbs",
+    "faq":"faq",
+    "intro":"instroduction",
+    "dir":"Table of Contents",
+    "correction":"correction",
+    "source":"source code",
+    "ref":"reference",
+    "email":"Email",
+    "password":"Password",
+    "login_through":"or login with",
+    "comment":"comment",
+    "inputverify":"Verification Code",
+    "newtopic":"New a Topic",
+    "prev":"prev",
+    "next": "next",
+    "topic":"topic",
+    "topic":"topics",
+    "reply":"reply",
+    "total":"total",
+    "chat":"chat"
+};
+}

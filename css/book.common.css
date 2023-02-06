@@ -1,0 +1,172 @@
+
+html{
+    font:14px normal Arial, sans-serif;
+    color:#626771;
+    background-color:#fff;
+    height:100%
+}
+
+body{
+    height:100%
+}
+
+dl{
+    list-style:none;
+    display: inline-block;
+    width:100%;
+}
+
+.menutitle{
+    padding: 10px 6px;
+    cursor:pointer;
+    background-color:#5555ff;
+    color:#ccc;
+    transition:0.3s;
+}
+
+dl{
+    padding:0;
+    margin:0;
+}
+
+dl dd.menu{
+    margin-left:1px;
+    padding: 10px 20px;
+    cursor:pointer;
+    background-color:#eee;
+    color:#7B8585;
+    
+    transition:0.3s;
+}
+
+dl dd.menu:hover{
+    background-color:#beecea;
+}
+
+dl dd.menu.focused{
+    color:#fff;
+    background-color:#41c7c2;
+}
+
+.navigation{
+    display: inline-block;
+    margin:2px 0 5px 0;
+}
+.hidden{
+    display:none;
+}
+
+#signupdiv,#logindiv {
+    width:200px;
+    margin: auto;  
+    position: absolute;  
+    top: 80px; left: 0; bottom: 0; right: 0;  
+}
+
+.fullwidth{
+    width:100%;
+    margin:5px 0px 5px 0px
+}
+
+#html_body{
+    height:100%;
+}
+h3{
+    width:98%;
+    background-color:#beecea;
+    padding:5px 0 5px 0;
+}
+.button{text-decoration: none !important;font-size:x-large; padding:0 5px 0 5px}
+#gButton{
+    border-style:none;
+    background-color : transparent;
+    padding:0;
+    cursor:hand;
+    width:50px;
+    height:50px;
+    display: table-cell;
+    vertical-align: middle;
+}
+
+#douButton{
+    border-style:none;
+    background-color : transparent;
+    padding:0;
+    cursor:hand;
+    width:50px;
+    height:50px;
+    display: table-cell;
+    vertical-align: middle;
+}
+
+.vcenter{
+    display: table-cell;
+    vertical-align: middle;
+}
+
+.gLoginText{
+    display:inline-block;
+}
+.toggleButton{
+    margin:0px 0px;
+    width:12px;
+    font-family: "Lucida Console", Monaco, monospace;
+    display:inline-block;
+}
+
+#leftCtrl{
+    z-index:2008;
+    color:#fff;
+    background:#111111;
+    cursor:hand;
+    width:12px;
+}
+#rightCtrl{
+    z-index:2008;
+    color:#fff;
+    background:#111111;
+    cursor:hand;
+    width:12px;
+}
+
+div.navigation .focusing{
+    color:#ff3333;
+}
+
+.left{
+    position: absolute;
+    left: 0;
+}
+.right{
+    position: absolute;
+    right: 0;
+}
+
+.fleft{
+    float: left;
+}
+.fright{
+    float: right;
+}
+
+.fullscreen{
+    position: absolute;
+    right: 0;
+    left:0;
+    top:0;
+    bottom:0;
+}
+
+
+
+div.center2d{
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    -webkit-transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%); 
+}
+
+div.error{
+    color:#ff0000
+}

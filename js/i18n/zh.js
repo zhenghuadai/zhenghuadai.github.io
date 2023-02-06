@@ -1,0 +1,32 @@
+if(window.bstr == null){
+    var bstr = {
+        "langcode":"zh-s",
+        "login":"登录",
+        "logoff":"退出",
+        "book":"书籍",
+        "blog":"博客",
+        "about":"关于",
+        "contact":"联系",
+        "signup":"注册",
+        "bbs":"bbs",
+        "faq":"faq",
+        "intro":"简介",
+        "dir":"目录(含样章)",
+        "correction":"勘误",
+        "source":"源码",
+        "ref":"参考资料",
+        "email":"邮件",
+        "password":"密码",
+        "login_through":"或通过以下方式登录",
+        "comment":"评论",
+        "inputverify":"请输入验证码",
+        "newtopic":"新建话题",
+        "prev":"上一页",
+        "next":"下一页",
+        "topic":"主题",
+        "topics":"篇",
+        "reply":"回复",
+        "total":"共",
+        "chat":"聊天"
+    };
+}
