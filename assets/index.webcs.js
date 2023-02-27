@@ -152,7 +152,6 @@ class CSKernel {
       passEncoder.setBindGroup(0, this.bindGroup);
     }
     if (this.__getNumberOfUniform() > 0) {
-      console.log(this.uniformBindGroup);
       passEncoder.setBindGroup(1, this.uniformBindGroup);
     }
     passEncoder.dispatchWorkgroups(this.groups[0], this.groups[1], this.groups[2]);
@@ -171,12 +170,12 @@ class CSKernel {
       uniformValue = new Uint32Array(values);
     } else if (mytype == "vec4<i32>") {
       uniformValue = new int32Array(values);
-    } else if (mytype == "vec4<f32>") {
+    } else if (mytype == "vec4<f32>" || mytype == "mat3x3f") {
       uniformValue = new Float32Array(values);
     } else {
       uniformValue = new Uint32Array(values);
     }
-    let bufferSizeInBytes = 16;
+    let bufferSizeInBytes = 4 * values.length + 16;
     if (this.uniformVids[slot] == null) {
       this.uniformVids[slot] = device.createBuffer({
         mappedAtCreation: true,
@@ -487,6 +486,9 @@ class WebCS {
     var isWhite = function(ch) {
       return ch == " " || ch == "	" || ch == "\n";
     };
+    var isSeperator = function(ch) {
+      return ch == " " || ch == "	" || ch == "\n" || ch == "=";
+    };
     {
       let re_shared = /shared\s+[^;]+;/g;
       let matches = [...csmain_nocomments.matchAll(re_shared)];
@@ -639,14 +641,16 @@ class WebCS {
     }
     let unform_str = "";
     {
-      settings.uniform = {};
+      if (!settings.hasOwnProperty("uniform")) {
+        settings.uniform = {};
+      }
       let re = /this\.uniform\.([a-zA-Z0-9_-]{1,})\.([a-zA-Z0-9_-]{1,})/g;
       let re2 = /this\.uniform\.([a-zA-Z0-9_-]{1,})([^\.a-zA-Z0-9_-])+/g;
       let matches = [...csmain_nocomments.matchAll(re)];
       let matches2 = [...csmain_nocomments.matchAll(re2)];
-      var indexOfSpace = function(s, startIndex) {
+      var indexOfSeperator = function(s, startIndex) {
         let si = startIndex;
-        while (!isWhite(s[si]))
+        while (!isSeperator(s[si]))
           si++;
         return si;
       };
@@ -666,6 +670,21 @@ class WebCS {
         "vec4<f32>": "vec4<f32>",
         "vec4<f64>": "vec4<f64>"
       };
+      let updateOneMatch = function(match) {
+        let lineStartI = 0;
+        lineStartI = Math.max(lineStartI, csmain_nocomments.lastIndexOf(";", match.index));
+        lineStartI = Math.max(lineStartI, csmain_nocomments.lastIndexOf("}", match.index));
+        lineStartI = Math.max(lineStartI, csmain_nocomments.lastIndexOf("{", match.index));
+        lineStartI = lineStartI + 1;
+        let colonIndex = csmain_nocomments.lastIndexOf(":", match.index);
+        if (colonIndex > lineStartI) {
+          let type_si = indexOfNonSpace(csmain_nocomments, colonIndex + 1);
+          let type_ei = indexOfSeperator(csmain_nocomments, type_si);
+          let type_str = csmain_nocomments.substring(type_si, type_ei);
+          let mytype = types[type_str] || type_str;
+          settings.uniform[vname]["type"] = mytype;
+        }
+      };
       for (let match of matches) {
         var vname = match[1];
         if (settings.uniform[vname] == null) {
@@ -673,16 +692,7 @@ class WebCS {
         }
         settings.uniform[vname][match[2]] = 1;
         {
-          let lineStartI = 0;
-          lineStartI = Math.max(lineStartI, csmain_nocomments.lastIndexOf(";", match.index));
-          lineStartI = Math.max(lineStartI, csmain_nocomments.lastIndexOf("}", match.index));
-          lineStartI = Math.max(lineStartI, csmain_nocomments.lastIndexOf("{", match.index));
-          lineStartI = lineStartI + 1;
-          let type_si = indexOfNonSpace(csmain_nocomments, lineStartI);
-          let type_ei = indexOfSpace(csmain_nocomments, type_si);
-          let type_str = csmain_nocomments.substring(type_si, type_ei);
-          let mytype = types[type_str] || "vec4<u32>";
-          settings.uniform[vname]["type"] = mytype;
+          updateOneMatch(match);
         }
       }
       for (let match of matches2) {
@@ -690,20 +700,23 @@ class WebCS {
         if (settings.uniform[vname] == null) {
           settings.uniform[vname] = { type: null, fields: {} };
         }
+        {
+          updateOneMatch(match);
+        }
       }
       let pi2 = 0;
       for (let uniform in settings.uniform) {
-        let mytype = settings.uniform[uniform].type;
+        let mytype = settings.uniform[uniform].type || "vec4<u32>";
         settings.uniform[uniform].index = pi2;
         let my_uniform_str = `
-                struct struct_${uniform} {data:${mytype};};
+                struct struct_${uniform} {data:${mytype}};
                 @group(1) @binding(${pi2}) var<uniform> ${uniform} : struct_${uniform};`;
         unform_str = unform_str + my_uniform_str;
       }
       {
         for (let uniform in settings.uniform) {
-          let memaccessor = new RegExp(["this.uniform.(", uniform, ")", "\\."].join(""), "g");
-          csmain_nocomments = csmain_nocomments.replace(memaccessor, "$1.data.");
+          let memaccessor = new RegExp(["this.uniform.(", uniform, ")"].join(""), "g");
+          csmain_nocomments = csmain_nocomments.replace(memaccessor, "$1.data");
         }
       }
     }
@@ -781,7 +794,6 @@ class WebCS {
     this.glsl_functions += func;
   }
   async present(tex) {
-    console.log("present");
     const canvas = this.canvas;
     const context = this.canvas.getContext("webgpu");
     const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
@@ -1094,7 +1106,7 @@ let gpu_kernels = {};
 let do_cs = {};
 var X = 512, Y = 512;
 (function() {
-  let testcases = ["smm_naive", "texture", "texture2", "img_texture", "img_dwt", "histogram", "filter"];
+  let testcases = ["smm_naive", "texture", "texture2", "img_texture", "img_dwt", "histogram", "filter", "filter2"];
   function gpu_smm_naive(A, B, C) {
     return `
                // C[M, N] = A[M, K] * B[K, N]
@@ -1196,6 +1208,20 @@ var X = 512, Y = 512;
     dst[pos.y][pos.x] = sum;     
     `;
   }
+  function gpu_filter2(src, dst) {
+    return `
+    var kernel:mat3x3f = this.uniform.KERNEL;
+    var pos:vec2<u32> = vec2<u32>(thread.xy);
+    var sum:vec4<f32> = vec4<f32>(0.0,0.0,0.0,1.0);
+    for(var j:u32=0; j<3; j++){
+        for(var i:u32=0; i<3; i++){
+            let pixel = src[pos.y + j -1][pos.x + i -1];
+            sum = sum + pixel * kernel[j][i];
+        }
+    }
+    dst[pos.y][pos.x] = sum;     
+    `;
+  }
   gpu_kernels.smm_naive = gpu_smm_naive;
   gpu_kernels.texture = gpu_texture;
   gpu_kernels.texture2 = gpu_texture2;
@@ -1203,6 +1229,7 @@ var X = 512, Y = 512;
   gpu_kernels.img_dwt = gpu_img_dwt;
   gpu_kernels.histogram = gpu_histogram;
   gpu_kernels.filter = gpu_filter;
+  gpu_kernels.filter2 = gpu_filter2;
   (function() {
     do_cs.do_smm_naive = async function(kernel_name) {
       var M = 64, N = 64, K = 64;
@@ -1299,6 +1326,17 @@ var X = 512, Y = 512;
       let texSrc = $("#image000")[0];
       await cs_kernels["filter"].run(texSrc, null);
       let tex = cs_kernels["filter"].getTexture("dst");
+      webCS.present(tex);
+      $("#display1")[0].appendChild(webCS.canvas);
+      $(webCS.canvas).show();
+    };
+    do_cs.do_filter2 = async function(kernel_name) {
+      {
+        cs_kernels["filter2"] = webCS.createShader(gpu_filter2, { local_size: [8, 8, 1], groups: [X / 8, Y / 8, 1], params: { src: "texture", "dst": "texture" } });
+      }
+      let texSrc = $("#image000")[0];
+      await cs_kernels["filter2"].run(texSrc, null, { "KERNEL": [1, 1, 1, 0, 0, 0, 0, 0, -1, -1, -1, 0] });
+      let tex = cs_kernels["filter2"].getTexture("dst");
       webCS.present(tex);
       $("#display1")[0].appendChild(webCS.canvas);
       $(webCS.canvas).show();
