@@ -125,6 +125,9 @@ function _isString(arg) {
 function _isArray(arg) {
   return Array.isArray(arg) || ArrayBuffer.isView(arg) && !(arg instanceof DataView);
 }
+function _align16b(n) {
+  return n + 15 & 4294967280;
+}
 class CSKernel {
   constructor(webCS2, prog, settings = {}) {
     this.kernel = prog;
@@ -166,16 +169,19 @@ class CSKernel {
     let mytype = this.settings.uniform[name].type;
     const slot = this.settings.uniform[name].index;
     let uniformValue = null;
-    if (mytype == "vec4<u32>") {
+    let dataType = this.__sfmt2datatype(mytype);
+    if (dataType == "u32") {
       uniformValue = new Uint32Array(values);
-    } else if (mytype == "vec4<i32>") {
-      uniformValue = new int32Array(values);
-    } else if (mytype == "vec4<f32>" || mytype == "mat3x3f") {
+    } else if (dataType == "i32") {
+      uniformValue = new Int32Array(values);
+    } else if (dataType == "f32") {
       uniformValue = new Float32Array(values);
+    } else if (dataType == "f16") {
+      uniformValue = new Uint16Array(values);
     } else {
       uniformValue = new Uint32Array(values);
     }
-    let bufferSizeInBytes = 4 * values.length + 16;
+    let bufferSizeInBytes = _align16b(4 * values.length);
     if (this.uniformVids[slot] == null) {
       this.uniformVids[slot] = device.createBuffer({
         mappedAtCreation: true,
@@ -459,6 +465,7 @@ class WebCS {
     this.SFmt2Fmt = {};
     this.Str2SFmt = {};
     this.presentSettings = { initialized: false };
+    this.__setFmt();
   }
   static async create(settings = {}) {
     const adapter = await navigator.gpu.requestAdapter();
@@ -578,13 +585,23 @@ class WebCS {
         });
       }
       {
+        params.forEach(function(ele, idx) {
+          let myreg = new RegExp("var[\\s]+" + ele + "[\\s]*:[\\s]*([^;]+)[\\s]*;");
+          let mymatch = csmain_nocomments.match(myreg);
+          if (mymatch) {
+            csmain_nocomments = csmain_nocomments.replace(myreg, "");
+            settings.params[ele].type.final_type = mymatch[1];
+          }
+        });
+      }
+      {
         let params_tex = Object.keys(settings.params).filter((key) => settings.params[key].type != null && settings.params[key].type.dim === 2);
         if (params_tex.length == 0)
           ;
         else {
           {
             for (let texname of params_tex) {
-              let texreader2 = new RegExp(["(", texname, ")", "\\s*\\[([^\\[\\]]+)\\]s*\\[([^\\[\\]]+)\\]"].join(""), "g");
+              let texreader2 = new RegExp(["(", texname, ")", "\\s*\\[([^\\[\\]]+)\\]\\s*\\[([^\\[\\]]+)\\]"].join(""), "g");
               let texwriter2 = new RegExp(["(", texname, ")", "\\s*\\[([^\\[\\]]+)\\]\\s*\\[([^\\[\\]]+)\\]\\s=([^;]+);"].join(""), "g");
               let texreader = new RegExp(["(", texname, ")", "\\s*\\[([^\\[\\]]+)\\]"].join(""), "g");
               let texwriter = new RegExp(["(", texname, ")", "\\s*\\[([^\\[\\]]+)\\]\\s*=([^;]+);"].join(""), "g");
@@ -617,7 +634,8 @@ class WebCS {
         let param_type = settings.params[param_name].type;
         if (param_type.dim == 1) {
           let num_type = param_type.type;
-          layout_str = layout_str + ` struct struct_${param_name}{ data: array<${num_type}>} ;
+          let final_type = param_type.final_type || `array<${num_type}>`;
+          layout_str = layout_str + ` struct struct_${param_name}{ data: ${final_type}} ;
 @group(0) @binding(${pi}) var<storage, read_write> ${param_name} : struct_${param_name};
 `;
         } else if (param_type.dim == 2) {
@@ -629,10 +647,12 @@ class WebCS {
             attr = attr + " " + rwmode;
           }
           if (attr.indexOf("readonly") > 0) {
-            layout_str = layout_str + `@group(0) @binding(${pi}) var ${param_name} : texture_2d<${value_type}>;
+            let final_type = param_type.final_type || `texture_2d<${value_type}>`;
+            layout_str = layout_str + `@group(0) @binding(${pi}) var ${param_name} : ${final_type};
 `;
           } else {
-            layout_str = layout_str + `@group(0) @binding(${pi}) var ${param_name} : texture_storage_2d<${pix_type}, write>;
+            let final_type = param_type.final_type || `texture_storage_2d<${pix_type}, write>`;
+            layout_str = layout_str + `@group(0) @binding(${pi}) var ${param_name} : ${final_type};
 `;
           }
         } else
@@ -1010,7 +1030,53 @@ class WebCS {
       ["rg32float", "rg32float", "f32", "rg32float"],
       ["rgba32uint", "rgba32uint", "u32", "rgba32uint"],
       ["rgba32sint", "rgba32sint", "i32", "rgba32sint"],
-      ["rgba32float", "rgba32float", "f32", "rgba32float"]
+      ["rgba32float", "rgba32float", "f32", "rgba32float"],
+      ["u32", "u32", "u32", "u32"],
+      ["i32", "i32", "i32", "i32"],
+      ["f32", "f32", "f32", "f32"],
+      ["f16", "f16", "f16", "f16"],
+      ["vec2i", "vec2i", "i32", "vec2<i32>"],
+      ["vec2<i32>", "vec2i", "i32", "vec2<i32>"],
+      ["vec2u", "vec2u", "u32", "vec2<u32>"],
+      ["vec2<u32>", "vec2u", "u32", "vec2<u32>"],
+      ["vec2f", "vec2f", "f32", "vec2<f32>"],
+      ["vec2<f32>", "vec2f", "f32", "vec2<f32>"],
+      ["vec2h", "vec2h", "f16", "vec2<f16>"],
+      ["vec2<f16>", "vec2h", "f16", "vec2<f16>"],
+      ["vec3i", "vec3i", "i32", "vec3<i32>"],
+      ["vec3<i32>", "vec3i", "i32", "vec3<i32>"],
+      ["vec3u", "vec3u", "u32", "vec3<u32>"],
+      ["vec3<u32>", "vec3u", "u32", "vec3<u32>"],
+      ["vec3f", "vec3f", "f32", "vec3<f32>"],
+      ["vec3<f32>", "vec3f", "f32", "vec3<f32>"],
+      ["vec3h", "vec3h", "f16", "vec3<f16>"],
+      ["vec3<f16>", "vec3h", "f16", "vec3<f16>"],
+      ["vec4i", "vec4i", "i32", "vec4<i32>"],
+      ["vec4<i32>", "vec4i", "i32", "vec4<i32>"],
+      ["vec4u", "vec4u", "u32", "vec4<u32>"],
+      ["vec4<u32>", "vec4u", "u32", "vec4<u32>"],
+      ["vec4f", "vec4f", "f32", "vec4<f32>"],
+      ["vec4<f32>", "vec4f", "f32", "vec4<f32>"],
+      ["vec4h", "vec4h", "f16", "vec4<f16>"],
+      ["vec4<f16>", "vec4h", "f16", "vec4<f16>"],
+      ["mat2x2f", "mat2x2f", "f32", "mat2x2<f32>"],
+      ["mat2x2<f32>", "mat2x2f", "f32", "mat2x2<f32>"],
+      ["mat2x3f", "mat2x3f", "f32", "mat2x3<f32>"],
+      ["mat2x3<f32>", "mat2x3f", "f32", "mat2x3<f32>"],
+      ["mat2x4f", "mat2x4f", "f32", "mat2x4<f32>"],
+      ["mat2x4<f32>", "mat2x4f", "f32", "mat2x4<f32>"],
+      ["mat3x2f", "mat3x2f", "f32", "mat3x2<f32>"],
+      ["mat3x2<f32>", "mat3x2f", "f32", "mat3x2<f32>"],
+      ["mat3x3f", "mat3x3f", "f32", "mat3x3<f32>"],
+      ["mat3x3<f32>", "mat3x3f", "f32", "mat3x3<f32>"],
+      ["mat3x4f", "mat3x4f", "f32", "mat3x4<f32>"],
+      ["mat3x4<f32>", "mat3x4f", "f32", "mat3x4<f32>"],
+      ["mat4x2f", "mat4x2f", "f32", "mat4x2<f32>"],
+      ["mat4x2<f32>", "mat4x2f", "f32", "mat4x2<f32>"],
+      ["mat4x3f", "mat4x3f", "f32", "mat4x3<f32>"],
+      ["mat4x3<f32>", "mat4x3f", "f32", "mat4x3<f32>"],
+      ["mat4x4f", "mat4x4f", "f32", "mat4x4<f32>"],
+      ["mat4x4<f32>", "mat4x4f", "f32", "mat4x4<f32>"]
     ];
     for (let fmt of fmts) {
       this.SFmt2DataType[fmt[0]] = fmt[2];
@@ -1109,10 +1175,19 @@ var X = 512, Y = 512;
   let testcases = ["smm_naive", "texture", "texture2", "img_texture", "img_dwt", "histogram", "filter", "filter2"];
   function gpu_smm_naive(A, B, C) {
     return `
+               // It is optional to decalare the src or dst in wgsl.
+               // Another option is to decalre them when  webCS.createShader : 
+               //     param:{A:"f32[]", B:"f32[]", C:"f32[]"}
+               var A:array<f32>;
+               // var B:array<f32>;
+               // var C:array<f32>;
+
+               //  declare the uniform,  must use 'this.uniform'
                // C[M, N] = A[M, K] * B[K, N]
-               var M:u32 = this.uniform.MNK.x;
-               var N:u32 = this.uniform.MNK.y;
-               var K:u32 = this.uniform.MNK.z;
+               var mnk:vec4u = this.uniform.MNK;
+               var M:u32 = mnk.x;
+               var N:u32 = mnk.y;
+               var K:u32 = mnk.z;
                // Compute a single element C[thread.y, thread.x] by looping over k
                var sum:f32 = 0.0;
                for (var k:u32 = 0u; k < K; k = k+1u)
@@ -1210,6 +1285,11 @@ var X = 512, Y = 512;
   }
   function gpu_filter2(src, dst) {
     return `
+    // It is optional to decalare the src or dst in wgsl.
+    // Another option is to decalre them when  webCS.createShader : 
+    //     params: { src: 'texture', 'dst': 'texture' }  // compiler will deduce the final type 
+    var src : texture_2d<f32>;
+    //var dst:texture_storage_2d<rgba8unorm,write>;
     var kernel:mat3x3f = this.uniform.KERNEL;
     var pos:vec2<u32> = vec2<u32>(thread.xy);
     var sum:vec4<f32> = vec4<f32>(0.0,0.0,0.0,1.0);
