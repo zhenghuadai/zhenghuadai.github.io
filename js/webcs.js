@@ -7,6 +7,10 @@ function _isArray(arg)
 {
     return Array.isArray(arg) || (ArrayBuffer.isView(arg) && !(arg instanceof DataView));
 }
+function _align16b(n)
+{
+    return (n +15)&0xfffffff0;
+}
 /** class for ComputeShader Kernel*/
 class CSKernel
 {
@@ -71,7 +75,7 @@ class CSKernel
         }
         if (this.__getNumberOfUniform() > 0)
         {
-            console.log(this.uniformBindGroup)
+            //console.log(this.uniformBindGroup)
             passEncoder.setBindGroup(1, this.uniformBindGroup);
         }
         passEncoder.dispatchWorkgroups(this.groups[0], this.groups[1], this.groups[2]);
@@ -92,24 +96,30 @@ class CSKernel
         const slot = this.settings.uniform[name].index;
 
         let uniformValue = null;
-        if (mytype == 'vec4<u32>')
+        let dataType = this.__sfmt2datatype(mytype);
+        if (dataType == 'u32')
         {
             uniformValue = new Uint32Array(values);
         }
-        else if (mytype == 'vec4<i32>')
+        else if ((dataType == 'i32'))
         {
-            uniformValue = new int32Array(values);
+            uniformValue = new Int32Array(values);
         }
-        else if (mytype == 'vec4<f32>')
+        else if ((dataType == 'f32'))
         {
             uniformValue = new Float32Array(values);
+        }
+        else if ((dataType == 'f16'))
+        {
+            uniformValue = new Uint16Array(values);
         }
         else
         {
             uniformValue = new Uint32Array(values);
         }
 
-        let bufferSizeInBytes = 16;
+        // TODO: get the correct length
+        let bufferSizeInBytes = _align16b(4 * values.length);
         if (this.uniformVids[slot] == null)
         {
             this.uniformVids[slot] = device.createBuffer({
@@ -268,7 +278,7 @@ class CSKernel
             let h = this.settings.groups[1] * this.settings.local_size[1];
             function createBuffer(bytes)
             {
-                let gpuBuffer  = device.createBuffer({
+                let gpuBuffer = device.createBuffer({
                     mappedAtCreation: true,
                     size: bytes,
                     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST
@@ -303,7 +313,7 @@ class CSKernel
                         // gl.bindBuffer(gl.SHADER_STORAGE_BUFFER, null);
                         this.vids[i]           = createBuffer(arg.byteLength);
                         const hostAccessBuffer = this.vids[i].getMappedRange();
-                        new Float32Array(hostAccessBuffer).set(arg);
+                        new arg.constructor(hostAccessBuffer).set(arg);
                         this.vids[i].unmap();
                     }
                     else
@@ -316,7 +326,7 @@ class CSKernel
                 {
                     this.vids[i]           = createBuffer(arg.byteLength);
                     const hostAccessBuffer = this.vids[i].getMappedRange();
-                    new Float32Array(hostAccessBuffer).set(arg);
+                    new arg.constructor(hostAccessBuffer).set(arg);
                     this.vids[i].unmap();
                 }
             }
@@ -495,13 +505,13 @@ class WebCS
         {
             this.canvas = settings.canvas;
         }
-        this.adapter       = adapter;
-        this.gpuDevice     = device;
-        this.SFmt2DataType = {};
-        this.SFmt2Fmt      = {};
-        this.Str2SFmt      = {};
-        this.presentSettings = {initialized: false};
-        //this.__setFmt();
+        this.adapter         = adapter;
+        this.gpuDevice       = device;
+        this.SFmt2DataType   = {};
+        this.SFmt2Fmt        = {};
+        this.Str2SFmt        = {};
+        this.presentSettings = { initialized: false };
+        this.__setFmt();
     };
 
     /*
@@ -545,6 +555,10 @@ class WebCS
         var isWhite           = function(ch) {
             return ((ch == ' ') || (ch == '\t') || (ch == '\n'));
         };
+        var isSeperator = function(ch) {
+            return ((ch == ' ') || (ch == '\t') || (ch == '\n') || (ch == '='));
+        };
+        // process the shared
         // process the shared
         if (true)
         {
@@ -686,6 +700,24 @@ class WebCS
                 });
             }
 
+            if (true)
+            {
+                // parse declaration of param from wgsl
+                // e.g
+                // var src:texture_2d<f32>;
+                // var dst : texture_storage_2d<rgba8unorm,write> ;
+                params.forEach(function(ele, idx) {
+                    let myreg = new RegExp('var[\\s]+' + ele + '[\\s]*:[\\s]*([^;]+)[\\s]*;');
+                    let mymatch = csmain_nocomments.match(myreg);
+                    if (mymatch)
+                    {
+                        csmain_nocomments = csmain_nocomments.replace(myreg, '');
+                        settings.params[ele].type.final_type = mymatch[1];
+                    }
+                    //console.log(mymatch);
+                });
+            }
+
             // procecss [], detect readonly/writeonly
             if (true)
             {
@@ -703,7 +735,7 @@ class WebCS
                         for (let texname of params_tex)
                         {
                             let texreader2 = new RegExp(
-                                ['(', texname, ')', '\\s*\\[([^\\[\\]]+)\\]\s*\\[([^\\[\\]]+)\\]'].join(''), 'g');
+                                ['(', texname, ')', '\\s*\\[([^\\[\\]]+)\\]\\s*\\[([^\\[\\]]+)\\]'].join(''), 'g');
                             let texwriter2 = new RegExp(
                                 ['(', texname, ')', '\\s*\\[([^\\[\\]]+)\\]\\s*\\[([^\\[\\]]+)\\]\\s=([^;]+);'].join(
                                     ''),
@@ -757,9 +789,10 @@ class WebCS
                 if (param_type.dim == 1)
                 { // buffer
                     let num_type = param_type.type;
+                    let final_type = param_type.final_type || `array<${num_type}>`;
                     // clang-format off
                      layout_str = layout_str +
-                        ` struct struct_${param_name}{ data: array<${num_type}>} ;\n@group(0) @binding(${pi}) var<storage, read_write> ${param_name} : struct_${param_name};\n`;
+                        ` struct struct_${param_name}{ data: ${final_type}} ;\n@group(0) @binding(${pi}) var<storage, read_write> ${param_name} : struct_${param_name};\n`;
                     //            [[group(0), binding(2)]] var<storage, write> resultMatrix : array<f32>;
                     //layout (std430, binding = 0) buffer ssbA {  float A[]; };
                     //`layout (std430, binding = ${pi}) buffer ssb${param_name} {  ${num_type} ${param_name}[]; };`;
@@ -777,11 +810,13 @@ class WebCS
                         attr = attr + " " + rwmode; 
                     }
                     if(attr.indexOf('readonly') > 0 ){
+                        let final_type = param_type.final_type || `texture_2d<${value_type}>`;
                         layout_str = layout_str +
-                            `@group(0) @binding(${pi}) var ${param_name} : texture_2d<${value_type}>;\n`;
+                            `@group(0) @binding(${pi}) var ${param_name} : ${final_type};\n`;
                     }else{
+                        let final_type = param_type.final_type || `texture_storage_2d<${pix_type}, write>`;
                         layout_str = layout_str +
-                            `@group(0) @binding(${pi}) var ${param_name} : texture_storage_2d<${pix_type}, write>;\n`;
+                            `@group(0) @binding(${pi}) var ${param_name} : ${final_type};\n`;
                     }
                     // clang-format on
                 }
@@ -795,8 +830,13 @@ class WebCS
         let unform_str = '';
         if (true)
         {
-            settings.uniform = {};
-            let re           = /this\.uniform\.([a-zA-Z0-9_-]{1,})\.([a-zA-Z0-9_-]{1,})/g;
+            if (!settings.hasOwnProperty('uniform'))
+            {
+                settings.uniform = {};
+            }
+            // var M:u32 = this.uniform.MNK.x;
+            let re = /this\.uniform\.([a-zA-Z0-9_-]{1,})\.([a-zA-Z0-9_-]{1,})/g;
+            // var kernel:mat3x3f = this.uniform.KERNEL;
             let re2          = /this\.uniform\.([a-zA-Z0-9_-]{1,})([^\.a-zA-Z0-9_-])+/g;
             let matches      = [...csmain_nocomments.matchAll(re)];
             let matches2     = [...csmain_nocomments.matchAll(re2)];
@@ -804,6 +844,12 @@ class WebCS
             var indexOfSpace = function(s, startIndex) {
                 let si = startIndex;
                 while (!isWhite(s[si]))
+                    si++;
+                return si;
+            };
+            var indexOfSeperator = function(s, startIndex) {
+                let si = startIndex;
+                while (!isSeperator(s[si]))
                     si++;
                 return si;
             };
@@ -823,6 +869,24 @@ class WebCS
                 'vec4<f32>': 'vec4<f32>',
                 'vec4<f64>': 'vec4<f64>'
             };
+            let updateOneMatch = function(match) {
+                let lineStartI = 0;
+                // get end of prvious expression
+                lineStartI = Math.max(lineStartI, csmain_nocomments.lastIndexOf(';', match.index));
+                lineStartI = Math.max(lineStartI, csmain_nocomments.lastIndexOf('}', match.index));
+                lineStartI = Math.max(lineStartI, csmain_nocomments.lastIndexOf('{', match.index));
+                lineStartI = lineStartI + 1; // prvious expression
+                // if there is ":",  such as     var M:u32 = this.uniform.MNK.x;
+                let colonIndex = csmain_nocomments.lastIndexOf(':', match.index);
+                if (colonIndex > lineStartI)
+                {
+                    let type_si                     = indexOfNonSpace(csmain_nocomments, colonIndex + 1);
+                    let type_ei                     = indexOfSeperator(csmain_nocomments, type_si);
+                    let type_str                    = csmain_nocomments.substring(type_si, type_ei);
+                    let mytype                      = types[type_str] || type_str;
+                    settings.uniform[vname]['type'] = mytype;
+                }
+            };
             for (let match of matches)
             {
                 var vname = match[1];
@@ -833,16 +897,7 @@ class WebCS
                 settings.uniform[vname][match[2]] = 1;
                 if (true)
                 {
-                    let lineStartI = 0;
-                    lineStartI     = Math.max(lineStartI, csmain_nocomments.lastIndexOf(';', match.index));
-                    lineStartI     = Math.max(lineStartI, csmain_nocomments.lastIndexOf('}', match.index));
-                    lineStartI     = Math.max(lineStartI, csmain_nocomments.lastIndexOf('{', match.index));
-                    lineStartI     = lineStartI + 1;
-                    let type_si    = indexOfNonSpace(csmain_nocomments, lineStartI);
-                    let type_ei    = indexOfSpace(csmain_nocomments, type_si);
-                    let type_str   = csmain_nocomments.substring(type_si, type_ei);
-                    let mytype     = types[type_str] || 'vec4<u32>';
-                    settings.uniform[vname]['type'] = mytype;
+                    updateOneMatch(match);
                 }
             }
             for (let match of matches2)
@@ -852,15 +907,19 @@ class WebCS
                 {
                     settings.uniform[vname] = { type: null, fields: {} }
                 }
+                if (true)
+                {
+                    updateOneMatch(match);
+                }
             }
             let pi = 0;
             for (let uniform in settings.uniform)
             {
-                let mytype                      = settings.uniform[uniform].type;
+                let mytype                      = settings.uniform[uniform].type || 'vec4<u32>';
                 settings.uniform[uniform].index = pi;
                 // [[binding(0), group(0)]] var<uniform> params : SimParams;
                 let my_uniform_str = `
-                struct struct_${uniform} {data:${mytype};};
+                struct struct_${uniform} {data:${mytype}};
                 @group(1) @binding(${pi}) var<uniform> ${uniform} : struct_${uniform};`;
                 unform_str = unform_str + my_uniform_str;
             }
@@ -868,8 +927,8 @@ class WebCS
             {
                 for (let uniform in settings.uniform)
                 {
-                    let memaccessor   = new RegExp(['this.uniform.(', uniform, ')', '\\.'].join(''), 'g');
-                    csmain_nocomments = csmain_nocomments.replace(memaccessor, '$1.data.');
+                    let memaccessor   = new RegExp(['this.uniform.(', uniform, ')'].join(''), 'g');
+                    csmain_nocomments = csmain_nocomments.replace(memaccessor, '$1.data');
                 }
                 //csmain_nocomments =
                 //    csmain_nocomments.replace(/this\.uniform\./g, '');
@@ -899,6 +958,8 @@ class WebCS
             csmain(thread, localthread, block);
         }
         `
+        //console.log(source);
+        //console.log(settings);
         // clang-format on
         return this.createShaderFromString(source, settings);
     };
@@ -995,7 +1056,7 @@ class WebCS
     {
         const canvas             = this.canvas;
         const context            = this.canvas.getContext('webgpu');
-        const presentationFormat =  navigator.gpu.getPreferredCanvasFormat(); //"rgba8unorm" ;
+        const presentationFormat = navigator.gpu.getPreferredCanvasFormat(); //"rgba8unorm" ;
         let device               = this.gpuDevice;
 
         /*
@@ -1013,7 +1074,7 @@ class WebCS
         */
         if (this.presentSettings.initialized == false)
         {
-            const presentationSize   = [
+            const presentationSize = [
                 canvas.width,
                 canvas.height,
             ];
@@ -1093,18 +1154,18 @@ class WebCS
                 minFilter: 'linear',
             });
 
-            this.presentSettings.sampler = sampler;
+            this.presentSettings.sampler                = sampler;
             this.presentSettings.fullscreenQuadPipeline = fullscreenQuadPipeline;
-            this.presentSettings.initialized = true;
+            this.presentSettings.initialized            = true;
         }
         else
         {
         }
 
-        let commandEncoder           = device.createCommandEncoder();
-        let _sampler                  = this.presentSettings.sampler;
-        let _fullscreenQuadPipeline   = this.presentSettings.fullscreenQuadPipeline;
-        const renderBindGroup        = device.createBindGroup({
+        let commandEncoder          = device.createCommandEncoder();
+        let _sampler                = this.presentSettings.sampler;
+        let _fullscreenQuadPipeline = this.presentSettings.fullscreenQuadPipeline;
+        const renderBindGroup       = device.createBindGroup({
             layout: _fullscreenQuadPipeline.getBindGroupLayout(0),
             entries: [
                 {
@@ -1117,7 +1178,7 @@ class WebCS
                 },
             ],
         });
-        const passEncoder            = commandEncoder.beginRenderPass({
+        const passEncoder           = commandEncoder.beginRenderPass({
             colorAttachments: [
                 {
                     view: context.getCurrentTexture().createView(),
@@ -1135,8 +1196,8 @@ class WebCS
     };
     createBuffer(size)
     {
-        let device     = this.gpuDevice;
-        let gpuBuffer  = device.createBuffer({
+        let device    = this.gpuDevice;
+        let gpuBuffer = device.createBuffer({
             mappedAtCreation: true,
             size: size,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST
@@ -1269,6 +1330,52 @@ class WebCS
             ['rgba32uint' , 'rgba32uint' , 'u32', 'rgba32uint'],
             ['rgba32sint' , 'rgba32sint' , 'i32', 'rgba32sint'],
             ['rgba32float', 'rgba32float', 'f32', 'rgba32float'],
+            ['u32'        , 'u32'        , 'u32', 'u32'],
+            ['i32'        , 'i32'        , 'i32', 'i32'],
+            ['f32'        , 'f32'        , 'f32', 'f32'],
+            ['f16'        , 'f16'        , 'f16', 'f16'],
+            ['vec2i'      , 'vec2i'      , 'i32', 'vec2<i32>'],
+            ['vec2<i32>'  , 'vec2i'      , 'i32', 'vec2<i32>'],
+            ['vec2u'      , 'vec2u'      , 'u32', 'vec2<u32>'],
+            ['vec2<u32>'  , 'vec2u'      , 'u32', 'vec2<u32>'],
+            ['vec2f'      , 'vec2f'      , 'f32', 'vec2<f32>'],
+            ['vec2<f32>'  , 'vec2f'      , 'f32', 'vec2<f32>'],
+            ['vec2h'      , 'vec2h'      , 'f16', 'vec2<f16>'],
+            ['vec2<f16>'  , 'vec2h'      , 'f16', 'vec2<f16>'],
+            ['vec3i'      , 'vec3i'      , 'i32', 'vec3<i32>'],
+            ['vec3<i32>'  , 'vec3i'      , 'i32', 'vec3<i32>'],
+            ['vec3u'      , 'vec3u'      , 'u32', 'vec3<u32>'],
+            ['vec3<u32>'  , 'vec3u'      , 'u32', 'vec3<u32>'],
+            ['vec3f'      , 'vec3f'      , 'f32', 'vec3<f32>'],
+            ['vec3<f32>'  , 'vec3f'      , 'f32', 'vec3<f32>'],
+            ['vec3h'      , 'vec3h'      , 'f16', 'vec3<f16>'],
+            ['vec3<f16>'  , 'vec3h'      , 'f16', 'vec3<f16>'],
+            ['vec4i'      , 'vec4i'      , 'i32', 'vec4<i32>'],
+            ['vec4<i32>'  , 'vec4i'      , 'i32', 'vec4<i32>'],
+            ['vec4u'      , 'vec4u'      , 'u32', 'vec4<u32>'],
+            ['vec4<u32>'  , 'vec4u'      , 'u32', 'vec4<u32>'],
+            ['vec4f'      , 'vec4f'      , 'f32', 'vec4<f32>'],
+            ['vec4<f32>'  , 'vec4f'      , 'f32', 'vec4<f32>'],
+            ['vec4h'      , 'vec4h'      , 'f16', 'vec4<f16>'],
+            ['vec4<f16>'  , 'vec4h'      , 'f16', 'vec4<f16>'],
+            ['mat2x2f'    , 'mat2x2f'    , 'f32', 'mat2x2<f32>'],
+            ['mat2x2<f32>', 'mat2x2f'    , 'f32', 'mat2x2<f32>'],
+            ['mat2x3f'    , 'mat2x3f'    , 'f32', 'mat2x3<f32>'],
+            ['mat2x3<f32>', 'mat2x3f'    , 'f32', 'mat2x3<f32>'],
+            ['mat2x4f'    , 'mat2x4f'    , 'f32', 'mat2x4<f32>'],
+            ['mat2x4<f32>', 'mat2x4f'    , 'f32', 'mat2x4<f32>'],
+            ['mat3x2f'    , 'mat3x2f'    , 'f32', 'mat3x2<f32>'],
+            ['mat3x2<f32>', 'mat3x2f'    , 'f32', 'mat3x2<f32>'],
+            ['mat3x3f'    , 'mat3x3f'    , 'f32', 'mat3x3<f32>'],
+            ['mat3x3<f32>', 'mat3x3f'    , 'f32', 'mat3x3<f32>'],
+            ['mat3x4f'    , 'mat3x4f'    , 'f32', 'mat3x4<f32>'],
+            ['mat3x4<f32>', 'mat3x4f'    , 'f32', 'mat3x4<f32>'],
+            ['mat4x2f'    , 'mat4x2f'    , 'f32', 'mat4x2<f32>'],
+            ['mat4x2<f32>', 'mat4x2f'    , 'f32', 'mat4x2<f32>'],
+            ['mat4x3f'    , 'mat4x3f'    , 'f32', 'mat4x3<f32>'],
+            ['mat4x3<f32>', 'mat4x3f'    , 'f32', 'mat4x3<f32>'],
+            ['mat4x4f'    , 'mat4x4f'    , 'f32', 'mat4x4<f32>'],
+            ['mat4x4<f32>', 'mat4x4f'    , 'f32', 'mat4x4<f32>'],
         ];
         // clang-format on
         for (let fmt of fmts)
