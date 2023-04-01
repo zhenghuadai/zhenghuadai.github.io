@@ -307,8 +307,8 @@ class CSKernel {
         return gpuBuffer;
       };
       var createBuffer = createBuffer2;
-      let w = this.settings.groups[0] * this.settings.local_size[0];
-      let h = this.settings.groups[1] * this.settings.local_size[1];
+      let w = this.groups[0] * this.settings.local_size[0];
+      let h = this.groups[1] * this.settings.local_size[1];
       if (arg == null) {
         if (this.vids[i] == null) {
           let size = w * h * (argType.type == "double" ? 8 : 4);
@@ -1174,6 +1174,7 @@ var X = 512, Y = 512;
 (function() {
   let testcases = [
     "addu32",
+    "subu32",
     "smm_naive",
     "texture",
     "texture2",
@@ -1212,11 +1213,17 @@ var X = 512, Y = 512;
   }
   function gpu_addu32(src0, src1, dst) {
     return `
-        // dst[:] = src0[:] + src1[:]
         var src0:array<u32>;
         var src1:array<u32>;
         var dst:array<u32>;
+        // dst[:] = src0[:] + src1[:]
         dst[thread.x] = src0[thread.x] + src1[thread.x];
+        `;
+  }
+  function gpu_subu32(src0, src1, dst) {
+    return `
+        // dst[:] = src0[:] - src1[:]
+        dst[thread.x] = src0[thread.x] - src1[thread.x];
         `;
   }
   function gpu_texcopy(src, dst) {
@@ -1332,6 +1339,7 @@ var X = 512, Y = 512;
   gpu_kernels.filter2 = gpu_filter2;
   gpu_kernels.save_texture = gpu_texture2;
   gpu_kernels.addu32 = gpu_addu32;
+  gpu_kernels.subu32 = gpu_subu32;
   (function() {
     do_cs.do_smm_naive = async function(kernel_name) {
       var M = 64, N = 64, K = 64;
@@ -1384,7 +1392,7 @@ var X = 512, Y = 512;
       let cpuC = createArray(N);
       let cs_addu32 = webCS.createShader(gpu_addu32, { local_size: [64, 1, 1], groups: [N / 64, 1, 1] });
       const t0 = performance.now();
-      await cs_addu32.run(cpuA, cpuB, cpuC);
+      await cs_addu32.setGroups(N / 64, 1, 1).run(cpuA, cpuB, cpuC);
       const t1 = performance.now();
       let t = t1 - t0;
       $("#time").html(t.toFixed(1).toString());
@@ -1394,6 +1402,47 @@ var X = 512, Y = 512;
         displayMatrix(cpuB, "gpuB", $("#data1_div")[0], 1, N);
         displayMatrix(cpuC, "gpuC", $("#data2_div")[0], 1, N);
         $("#data_div").show();
+      }
+    };
+    do_cs.do_subu32 = async function(kernel_name) {
+      var N = 64;
+      var createArray = function(n) {
+        var buf = new Uint32Array(n);
+        for (var i = 0; i < n; i++) {
+          buf[i] = Math.random() * N;
+        }
+        return buf;
+      };
+      let cpuA = createArray(N);
+      let cpuB = createArray(N);
+      let cpuC = createArray(N);
+      let cs_addu32 = webCS.createShader(gpu_addu32, { local_size: [64, 1, 1], groups: [N / 64, 1, 1] });
+      let cs_subu32 = webCS.createShader(gpu_subu32, { local_size: [64, 1, 1], params: { src0: "u32[]", src1: "u32[]", dst: "u32[]" } });
+      const t0 = performance.now();
+      await cs_addu32.setGroups(N / 64, 1, 1).run(cpuA, cpuB, cpuC);
+      const t1 = performance.now();
+      let t = t1 - t0;
+      $("#time").html(t.toFixed(1).toString());
+      {
+        cpuC = await cs_addu32.getData("dst", "uint32");
+        displayMatrix(cpuA, "gpuA", $("#data0_div")[0], 1, N);
+        displayMatrix(cpuB, "gpuB", $("#data1_div")[0], 1, N);
+        displayMatrix(cpuC, "gpuC.add", $("#data2_div")[0], 1, N);
+        $("#data_div").show();
+      }
+      let vid_src0 = cs_addu32.getBuffer("src0");
+      let vid_src1 = cs_addu32.getBuffer("src1");
+      let vid_dst = webCS.createBuffer(N * 4);
+      await cs_subu32.setGroups(N / 64, 1, 1).run(vid_src0, vid_src1, vid_dst);
+      {
+        cpuC = await cs_subu32.getData("dst", "uint32");
+        let sub_el = $("#data2sub_div");
+        if (sub_el.length == 0) {
+          $("#data_div").append("<div id=data2sub_div class=test_case></div>");
+        }
+        displayMatrix(cpuC, "gpuC.sub", $("#data2sub_div")[0], 1, N);
+        $("#data_div").show();
+        $("#data_div").find(".test_case").show();
       }
     };
     do_cs.do_texture = async function(kernel_name) {
@@ -1663,6 +1712,9 @@ $(function() {
     }
     let ele = myfilter;
     editorgpu.setValue(gpu_kernels[ele].toString());
+    if (ele == "subu32") {
+      editorgpu.setValue(gpu_kernels["subu32"].toString() + "\n" + gpu_kernels["addu32"].toString());
+    }
     editorjs.setValue(("do_" + ele in do_cs ? do_cs["do_" + ele] : do_cs["do_general"]).toString());
   }
   $("#loadexamplemenu").menu({ select: loadExample });
