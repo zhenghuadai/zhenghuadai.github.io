@@ -1,2 +1,2 @@
 # zhenghuadai.github.io
-http://blog.biosuefi.com/
+zhenghuadai.github.io
